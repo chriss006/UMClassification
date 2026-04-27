@@ -1,4 +1,5 @@
 import numpy as np
+from typing import Dict
 from sklearn.metrics import (
     accuracy_score,
     precision_recall_fscore_support,

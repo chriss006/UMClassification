@@ -1,8 +1,9 @@
 import torch
+
 CONFIG = {
     "data_root": "/home/halee/datasets/UWF",
-    "output_dir": "/home/halee/outputs/convnext_tiny",
-    "model_name": "facebook/convnext-tiny-224",
+    "output_dir": "/home/halee/outputs/swin_tiny",
+    "model_name": "microsoft/swin-tiny-patch4-window7-224",
     "num_labels": 6,
 
     "image_extensions": [".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"],
@@ -14,18 +15,18 @@ CONFIG = {
     "train_batch_size": 8,
     "eval_batch_size": 8,
     "gradient_accumulation_steps": 2,
-    "num_workers": 2,
+    "num_workers": 4,
     "fp16": torch.cuda.is_available(),
     "save_total_limit": 2,
     "logging_steps": 10,
 
+    # best model / early stopping 
     "metric_for_best_model": "eval_mAP",
     "greater_is_better": True,
     "early_stopping_patience": 10,
     "early_stopping_threshold": 0.001,
 
+    # focal loss
     "focal_gamma": 2.0,
-    "focal_alpha": None,
-
-    "resume_from_checkpoint": None,  
+    "focal_alpha": None,   
 }
