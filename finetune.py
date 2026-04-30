@@ -2,7 +2,7 @@
 import os
 from pathlib import Path
 import torch
-
+import argparse
 from transformers import (
     AutoImageProcessor,
     TrainingArguments,
@@ -22,17 +22,36 @@ from core.trainers import FocalTrainer
 from evaluation.test_utils import run_test_and_save_outputs
 
 
+os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+
 def ensure_dir(path: str):
     os.makedirs(path, exist_ok=True)
 
+def get_args():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--data_root", type=str, default=None)
+    parser.add_argument("--output_dir", type=str, default=None)
+
+    return parser.parse_args()
 
 def print_gpu_info():
+    print("=== Device Info ===")
+
     print("torch.cuda.is_available():", torch.cuda.is_available())
     print("torch.cuda.device_count():", torch.cuda.device_count())
 
     if torch.cuda.is_available():
         for i in range(torch.cuda.device_count()):
-            print(f"GPU {i}: {torch.cuda.get_device_name(i)}")
+            print(f"CUDA GPU {i}: {torch.cuda.get_device_name(i)}")
+
+    print("torch.backends.mps.is_available():", torch.backends.mps.is_available())
+    print("torch.backends.mps.is_built():", torch.backends.mps.is_built())
+
+    if torch.backends.mps.is_available():
+        print("Using Apple Silicon GPU (MPS)")
+    else:
+        print("MPS not available → using CPU")
 
 
 def validate_class_consistency(train_dataset, val_dataset, test_dataset):
@@ -52,6 +71,8 @@ def build_label_maps(class_names):
 
 
 def build_training_args(config):
+    use_mps = torch.backends.mps.is_available()
+
     return TrainingArguments(
         output_dir=config["output_dir"],
         remove_unused_columns=False,
@@ -65,7 +86,8 @@ def build_training_args(config):
         gradient_accumulation_steps=config["gradient_accumulation_steps"],
         num_train_epochs=config["num_train_epochs"],
         weight_decay=config["weight_decay"],
-        fp16=config["fp16"],
+        fp16=False,  # Apple Silicon에서는 끄는 게 안전
+        use_mps_device=use_mps,
         dataloader_num_workers=config["num_workers"],
         load_best_model_at_end=True,
         metric_for_best_model=config["metric_for_best_model"],
@@ -76,8 +98,14 @@ def build_training_args(config):
     )
 
 
-def main():
+def main(args):
     set_seed(CONFIG["seed"])
+    if args.data_root is not None:
+        CONFIG["data_root"] = args.data_root
+
+    if args.output_dir is not None:
+        CONFIG["output_dir"] = args.output_dir
+    
     ensure_dir(CONFIG["output_dir"])
     print_gpu_info()
 
@@ -180,4 +208,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    args = get_args()
+    main(args)

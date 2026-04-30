@@ -1,7 +1,7 @@
 import torch
 CONFIG = {
-    "data_root": "/home/halee/datasets/UWF",
-    "output_dir": "/home/halee/outputs/convnext_tiny",
+    "data_root": "/Volumes/Extreme SSD/MAASAI/dataset/UWF",
+    "output_dir": "/Volumes/Extreme SSD/MAASAI/finetune_UWF/ConvNext",
     "model_name": "facebook/convnext-tiny-224",
     "num_labels": 6,
 
@@ -27,5 +27,5 @@ CONFIG = {
     "focal_gamma": 2.0,
     "focal_alpha": None,
 
-    "resume_from_checkpoint": None,  
+    "resume_from_checkpoint": None
 }
