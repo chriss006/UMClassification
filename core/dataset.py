@@ -9,6 +9,32 @@ import torch
 from torch.utils.data import Dataset
 
 
+class ImageListWithPaths(Dataset):
+    def __init__(self, samples, image_processor, classes):
+        self.samples = samples
+        self.image_processor = image_processor
+        self.classes = classes
+        self.class_to_idx = {cls_name: idx for idx, cls_name in enumerate(classes)}
+        self.idx_to_class = {idx: cls_name for cls_name, idx in self.class_to_idx.items()}
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+
+        image_path, label = self.samples[idx]
+        image = Image.open(image_path).convert("RGB")
+
+        processed = self.image_processor(images=image, return_tensors="pt")
+        pixel_values = processed["pixel_values"].squeeze(0)
+
+        return {
+            "pixel_values": pixel_values,
+            "labels": label,
+            "image_path": image_path,
+        }
+
+
 class ImageFolderWithPaths(Dataset):
     def __init__(self, root_dir: str, image_processor, image_extensions):
         self.root_dir = Path(root_dir)

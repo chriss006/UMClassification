@@ -3,6 +3,10 @@ import os
 from pathlib import Path
 import torch
 import argparse
+import copy
+import numpy as np
+from sklearn.model_selection import StratifiedKFold
+from torch.utils.data import Dataset
 from transformers import (
     AutoImageProcessor,
     TrainingArguments,
@@ -13,7 +17,7 @@ from transformers import (
 from transformers.trainer_callback import PrinterCallback
 
 from configs.convnext_tiny import CONFIG
-from core.dataset import ImageFolderWithPaths, ImageClassificationCollator
+from core.dataset import ImageFolderWithPaths, ImageClassificationCollator, ImageListWithPaths
 from core.builders import build_model
 from core.callbacks import TrainValHistoryCallback, PrettyLogCallback
 from core.losses import FocalLoss
@@ -32,6 +36,8 @@ def get_args():
 
     parser.add_argument("--data_root", type=str, default=None)
     parser.add_argument("--output_dir", type=str, default=None)
+    parser.add_argument("--kfold", type=int, default=1)
+    parser.add_argument("--fold_index", type=int, default=-1)
 
     return parser.parse_args()
 
@@ -96,45 +102,8 @@ def build_training_args(config):
         report_to="none",
         disable_tqdm=True,
     )
-
-
-def main(args):
-    set_seed(CONFIG["seed"])
-    if args.data_root is not None:
-        CONFIG["data_root"] = args.data_root
-
-    if args.output_dir is not None:
-        CONFIG["output_dir"] = args.output_dir
     
-    ensure_dir(CONFIG["output_dir"])
-    print_gpu_info()
-
-    data_root = Path(CONFIG["data_root"])
-    train_dir = data_root / "train"
-    val_dir = data_root / "val"
-    test_dir = data_root / "test"
-
-    image_processor = AutoImageProcessor.from_pretrained(CONFIG["model_name"])
-
-    train_dataset = ImageFolderWithPaths(
-        root_dir=str(train_dir),
-        image_processor=image_processor,
-        image_extensions=CONFIG["image_extensions"],
-    )
-    val_dataset = ImageFolderWithPaths(
-        root_dir=str(val_dir),
-        image_processor=image_processor,
-        image_extensions=CONFIG["image_extensions"],
-    )
-    test_dataset = ImageFolderWithPaths(
-        root_dir=str(test_dir),
-        image_processor=image_processor,
-        image_extensions=CONFIG["image_extensions"],
-    )
-
-    validate_class_consistency(train_dataset, val_dataset, test_dataset)
-
-    class_names = train_dataset.classes
+def run_one_training(config, train_dataset, val_dataset, test_dataset, image_processor, class_names):
     label2id, id2label = build_label_maps(class_names)
 
     print(f"Classes: {class_names}")
@@ -142,24 +111,24 @@ def main(args):
     print(f"Val size:   {len(val_dataset)}")
     print(f"Test size:  {len(test_dataset)}")
 
-    model = build_model(CONFIG, id2label=id2label, label2id=label2id)
+    model = build_model(config, id2label=id2label, label2id=label2id)
     collator = ImageClassificationCollator()
-    training_args = build_training_args(CONFIG)
+    training_args = build_training_args(config)
 
     history_callback = TrainValHistoryCallback(
-        save_path=os.path.join(CONFIG["output_dir"], "train_val_history.json")
+        save_path=os.path.join(config["output_dir"], "train_val_history.json")
     )
 
     pretty_log_callback = PrettyLogCallback()
 
     early_stopping_callback = EarlyStoppingCallback(
-        early_stopping_patience=CONFIG["early_stopping_patience"],
-        early_stopping_threshold=CONFIG["early_stopping_threshold"],
+        early_stopping_patience=config["early_stopping_patience"],
+        early_stopping_threshold=config["early_stopping_threshold"],
     )
 
     focal_loss_fn = FocalLoss(
-        gamma=CONFIG["focal_gamma"],
-        alpha=CONFIG["focal_alpha"],
+        gamma=config["focal_gamma"],
+        alpha=config["focal_alpha"],
     )
 
     trainer = FocalTrainer(
@@ -181,32 +150,116 @@ def main(args):
     trainer.remove_callback(PrinterCallback)
 
     print("\nStart training...")
-    trainer.train(resume_from_checkpoint=CONFIG["resume_from_checkpoint"])
+    trainer.train(resume_from_checkpoint=config["resume_from_checkpoint"])
 
     print("\nSaving best model...")
-    trainer.save_model(os.path.join(CONFIG["output_dir"], "best_model"))
+    trainer.save_model(os.path.join(config["output_dir"], "best_model"))
 
     print("\nRunning test evaluation...")
     run_test_and_save_outputs(
         trainer=trainer,
         test_dataset=test_dataset,
         idx_to_class=id2label,
-        output_dir=CONFIG["output_dir"],
+        output_dir=config["output_dir"],
     )
 
-    print("\nSaved files:")
-    for filename in [
-        "best_model",
-        "train_val_history.json",
-        "test_predictions.csv",
-        "test_classwise_report.csv",
-        "test_metrics.json",
-        "confusion_matrix.csv",
-        "confusion_matrix.png",
-    ]:
-        print(os.path.join(CONFIG["output_dir"], filename))
 
+def main(args):
+    set_seed(CONFIG["seed"])
 
+    if args.data_root is not None:
+        CONFIG["data_root"] = args.data_root
+
+    if args.output_dir is not None:
+        CONFIG["output_dir"] = args.output_dir
+
+    ensure_dir(CONFIG["output_dir"])
+    print_gpu_info()
+
+    data_root = Path(CONFIG["data_root"])
+    train_dir = data_root / "train"
+    val_dir = data_root / "val"
+    test_dir = data_root / "test"
+
+    image_processor = AutoImageProcessor.from_pretrained(CONFIG["model_name"])
+
+    train_dataset_raw = ImageFolderWithPaths(
+        root_dir=str(train_dir),
+        image_processor=image_processor,
+        image_extensions=CONFIG["image_extensions"],
+    )
+    val_dataset_raw = ImageFolderWithPaths(
+        root_dir=str(val_dir),
+        image_processor=image_processor,
+        image_extensions=CONFIG["image_extensions"],
+    )
+    test_dataset = ImageFolderWithPaths(
+        root_dir=str(test_dir),
+        image_processor=image_processor,
+        image_extensions=CONFIG["image_extensions"],
+    )
+
+    validate_class_consistency(train_dataset_raw, val_dataset_raw, test_dataset)
+
+    class_names = train_dataset_raw.classes
+    original_output_dir = CONFIG["output_dir"]
+
+    if args.kfold > 1:
+        all_samples = train_dataset_raw.samples + val_dataset_raw.samples
+        labels = np.array([label for _, label in all_samples])
+
+        skf = StratifiedKFold(
+            n_splits=args.kfold,
+            shuffle=True,
+            random_state=CONFIG["seed"],
+        )
+
+        folds = list(skf.split(np.zeros(len(labels)), labels))
+        fold_indices = [args.fold_index] if args.fold_index >= 0 else list(range(args.kfold))
+
+        for fold in fold_indices:
+            print(f"\n========== Running fold {fold}/{args.kfold - 1} ==========")
+
+            train_idx, val_idx = folds[fold]
+
+            train_samples = [all_samples[i] for i in train_idx]
+            val_samples = [all_samples[i] for i in val_idx]
+
+            train_dataset = ImageListWithPaths(
+                samples=train_samples,
+                image_processor=image_processor,
+                classes=class_names,
+            )
+
+            val_dataset = ImageListWithPaths(
+                samples=val_samples,
+                image_processor=image_processor,
+                classes=class_names,
+            )
+
+            fold_config = copy.deepcopy(CONFIG)
+            fold_config["output_dir"] = os.path.join(original_output_dir, f"fold{fold}")
+            ensure_dir(fold_config["output_dir"])
+
+            run_one_training(
+                config=fold_config,
+                train_dataset=train_dataset,
+                val_dataset=val_dataset,
+                test_dataset=test_dataset,
+                image_processor=image_processor,
+                class_names=class_names,
+            )
+
+    else:
+        run_one_training(
+            config=CONFIG,
+            train_dataset=train_dataset_raw,
+            val_dataset=val_dataset_raw,
+            test_dataset=test_dataset,
+            image_processor=image_processor,
+            class_names=class_names,
+        )
+        
 if __name__ == "__main__":
     args = get_args()
     main(args)
