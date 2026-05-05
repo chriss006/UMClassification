@@ -16,7 +16,7 @@ from transformers import (
 
 from transformers.trainer_callback import PrinterCallback
 
-from configs.swin_tiny import CONFIG
+from configs.convext_tiny import CONFIG
 from core.dataset import ImageFolderWithPaths, ImageClassificationCollator, ImageListWithPaths
 from core.builders import build_model
 from core.callbacks import TrainValHistoryCallback, PrettyLogCallback
@@ -25,8 +25,6 @@ from core.metrics import compute_metrics
 from core.trainers import FocalTrainer
 from evaluation.test_utils import run_test_and_save_outputs
 
-
-os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
 def ensure_dir(path: str):
     os.makedirs(path, exist_ok=True)
@@ -126,26 +124,48 @@ def run_one_training(config, train_dataset, val_dataset, test_dataset, image_pro
         early_stopping_threshold=config["early_stopping_threshold"],
     )
 
-    focal_loss_fn = FocalLoss(
-        gamma=config["focal_gamma"],
-        alpha=config["focal_alpha"],
-    )
+    loss_type = config.get("loss_type", "focal")
 
-    trainer = FocalTrainer(
-        model=model,
-        args=training_args,
-        train_dataset=train_dataset,
-        eval_dataset=val_dataset,
-        data_collator=collator,
-        processing_class=image_processor,
-        compute_metrics=compute_metrics,
-        callbacks=[
-            history_callback,
-            pretty_log_callback,
-            early_stopping_callback,
-        ],
-        focal_loss_fn=focal_loss_fn,
-    )
+    if loss_type == "focal":
+        focal_loss_fn = FocalLoss(
+            gamma=config["focal_gamma"],
+            alpha=config["focal_alpha"],
+        )
+    
+        trainer = FocalTrainer(
+            model=model,
+            args=training_args,
+            train_dataset=train_dataset,
+            eval_dataset=val_dataset,
+            data_collator=collator,
+            processing_class=image_processor,
+            compute_metrics=compute_metrics,
+            callbacks=[
+                history_callback,
+                pretty_log_callback,
+                early_stopping_callback,
+            ],
+            focal_loss_fn=focal_loss_fn,
+        )
+    
+    elif loss_type == "ce":
+        trainer = Trainer(
+            model=model,
+            args=training_args,
+            train_dataset=train_dataset,
+            eval_dataset=val_dataset,
+            data_collator=collator,
+            processing_class=image_processor,
+            compute_metrics=compute_metrics,
+            callbacks=[
+                history_callback,
+                pretty_log_callback,
+                early_stopping_callback,
+            ],
+        )
+    
+    else:
+        raise ValueError(f"Unknown loss_type: {loss_type}")
 
     trainer.remove_callback(PrinterCallback)
 
