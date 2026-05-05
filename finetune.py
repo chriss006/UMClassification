@@ -16,7 +16,7 @@ from transformers import (
 
 from transformers.trainer_callback import PrinterCallback
 
-from configs.convnext_tiny import CONFIG
+from configs.swin_tiny import CONFIG
 from core.dataset import ImageFolderWithPaths, ImageClassificationCollator, ImageListWithPaths
 from core.builders import build_model
 from core.callbacks import TrainValHistoryCallback, PrettyLogCallback
