@@ -13,10 +13,10 @@ from transformers import (
     set_seed,
     EarlyStoppingCallback,
 )
-
+from transformers import Trainer
 from transformers.trainer_callback import PrinterCallback
 
-from configs.convext_tiny import CONFIG
+from configs.convnext_tiny import CONFIG
 from core.dataset import ImageFolderWithPaths, ImageClassificationCollator, ImageListWithPaths
 from core.builders import build_model
 from core.callbacks import TrainValHistoryCallback, PrettyLogCallback
