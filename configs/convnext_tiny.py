@@ -24,8 +24,9 @@ CONFIG = {
     "early_stopping_patience": 10,
     "early_stopping_threshold": 0.001,
 
-    "focal_gamma": 2.0,
-    "focal_alpha": None,
+    "loss_type": "ce",
+#    "focal_gamma": 2.0,
+#    "focal_alpha": None,
 
     "resume_from_checkpoint": None
 }

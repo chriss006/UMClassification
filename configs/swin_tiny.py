@@ -28,5 +28,7 @@ CONFIG = {
 
     # focal loss
     "focal_gamma": 2.0,
-    "focal_alpha": None,   
+    "focal_alpha": None,
+    # checkpoint
+    "resume_from_checkpoint": None,   
 }

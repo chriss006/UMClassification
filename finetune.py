@@ -82,7 +82,7 @@ def build_training_args(config):
     return TrainingArguments(
         output_dir=config["output_dir"],
         remove_unused_columns=False,
-        evaluation_strategy="epoch",
+        eval_strategy="epoch",
         save_strategy="epoch",
         logging_strategy="steps",
         logging_steps=config["logging_steps"],
@@ -92,8 +92,8 @@ def build_training_args(config):
         gradient_accumulation_steps=config["gradient_accumulation_steps"],
         num_train_epochs=config["num_train_epochs"],
         weight_decay=config["weight_decay"],
-        fp16=False,  # Apple Silicon에서는 끄는 게 안전
-        use_mps_device=use_mps,
+        fp16=True,  # Apple Silicon에서는 끄는 게 안전
+        #use_mps_device=use_mps,
         dataloader_num_workers=config["num_workers"],
         load_best_model_at_end=True,
         metric_for_best_model=config["metric_for_best_model"],
