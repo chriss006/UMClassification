@@ -5,7 +5,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
-from core.metrics import softmax_numpy
 from typing import Dict, Any
 from torch.utils.data import Dataset
 from transformers import Trainer
@@ -18,6 +17,13 @@ from sklearn.metrics import (
     confusion_matrix,
 )
 from sklearn.preprocessing import label_binarize
+from core.metrics import (
+    softmax_numpy,
+    cross_entropy_numpy,
+    classwise_cross_entropy_numpy,
+    classwise_accuracy_numpy,
+    expected_calibration_error,
+)
 
 
 
@@ -58,6 +64,8 @@ def run_test_and_save_outputs(
             "true_label": int(true_idx),
             "pred_label": pred_idx,
             "correct": int(pred_idx == int(true_idx)),
+            "confidence": float(np.max(probs[i])),
+            "true_class_prob": float(probs[i, int(true_idx)]),
         }
 
         for c in range(len(class_names)):
@@ -90,6 +98,8 @@ def run_test_and_save_outputs(
         labels, preds, average="weighted", zero_division=0
     )
 
+    num_classes = probs.shape[1]
+    
     test_metrics = {
         "loss": float(pred_output.metrics.get("test_loss", float("nan"))),
         "acc": float(accuracy_score(labels, preds)),
@@ -99,7 +109,25 @@ def run_test_and_save_outputs(
         "precision_weighted": float(precision_weighted),
         "recall_weighted": float(recall_weighted),
         "f1_weighted": float(f1_weighted),
+        "ce": cross_entropy_numpy(probs, labels),
+        "ece": expected_calibration_error(probs, labels, n_bins=15),
     }
+
+    test_metrics.update(
+        classwise_cross_entropy_numpy(
+            probs=probs,
+            labels=labels,
+            num_classes=num_classes,
+        )
+    )
+
+    test_metrics.update(
+        classwise_accuracy_numpy(
+            preds=preds,
+            labels=labels,
+            num_classes=num_classes,
+        )
+    )
 
     try:
         test_metrics["auc_roc_ovr"] = float(
@@ -109,7 +137,6 @@ def run_test_and_save_outputs(
         test_metrics["auc_roc_ovr"] = float("nan")
 
     try:
-        num_classes = probs.shape[1]
         labels_bin = label_binarize(labels, classes=np.arange(num_classes))
         test_metrics["mAP"] = float(
             average_precision_score(labels_bin, probs, average="macro")
@@ -140,6 +167,8 @@ def run_test_and_save_outputs(
     print(
         "[test] "
         f"loss: {test_metrics['loss']:.4f} | "
+        f"ce: {test_metrics['ce']:.4f} | "
+        f"ece: {test_metrics['ece']:.4f} | "
         f"acc: {test_metrics['acc']:.4f} | "
         f"precision_macro: {test_metrics['precision_macro']:.4f} | "
         f"recall_macro: {test_metrics['recall_macro']:.4f} | "
