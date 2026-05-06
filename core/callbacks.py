@@ -10,7 +10,6 @@ def save_json(obj: Any, path: str):
         json.dump(obj, f, indent=2, ensure_ascii=False)
 
 
-
 class TrainValHistoryCallback(TrainerCallback):
     def __init__(self, save_path: str):
         self.records = []
@@ -30,26 +29,30 @@ class TrainValHistoryCallback(TrainerCallback):
         if metrics is None:
             return
 
-        if "eval_loss" in metrics:
-            epoch = metrics.get("epoch", state.epoch)
-            epoch_int = int(math.ceil(epoch)) if epoch is not None else None
+        if "eval_loss" not in metrics:
+            return
 
-            record = {
-                "epoch": epoch_int,
-                "train_loss": self._latest_train_loss,
-                "lr": self._latest_lr,
-                "val_loss": metrics.get("eval_loss"),
-                "val_accuracy": metrics.get("eval_accuracy"),
-                "val_precision_macro": metrics.get("eval_precision_macro"),
-                "val_recall_macro": metrics.get("eval_recall_macro"),
-                "val_f1_macro": metrics.get("eval_f1_macro"),
-                "val_f1_weighted": metrics.get("eval_f1_weighted"),
-                "val_auc_roc_ovr": metrics.get("eval_auc_roc_ovr"),
-                "val_mAP": metrics.get("eval_mAP"),
-            }
+        epoch = metrics.get("epoch", state.epoch)
+        epoch_int = int(math.ceil(epoch)) if epoch is not None else None
 
-            self.records.append(record)
-            save_json(self.records, self.save_path)
+        record = {
+            "epoch": epoch_int,
+            "train_loss": self._latest_train_loss,
+            "lr": self._latest_lr,
+        }
+
+        # save all eval_* metrics automatically
+        for k, v in metrics.items():
+            if k.startswith("eval_"):
+                save_key = "val_" + k.replace("eval_", "")
+
+                try:
+                    record[save_key] = float(v)
+                except (TypeError, ValueError):
+                    record[save_key] = v
+
+        self.records.append(record)
+        save_json(self.records, self.save_path)
 
 
 class PrettyLogCallback(TrainerCallback):
@@ -72,6 +75,8 @@ class PrettyLogCallback(TrainerCallback):
             print(
                 f"[val] epoch {epoch_int} | "
                 f"loss: {float(logs['eval_loss']):.4f} | "
+                f"ce: {float(logs.get('eval_ce', 0.0)):.4f} | "
+                f"ece: {float(logs.get('eval_ece', 0.0)):.4f} | "
                 f"acc: {float(logs.get('eval_accuracy', 0.0)):.4f} | "
                 f"precision_macro: {float(logs.get('eval_precision_macro', 0.0)):.4f} | "
                 f"recall_macro: {float(logs.get('eval_recall_macro', 0.0)):.4f} | "
