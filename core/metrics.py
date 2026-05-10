@@ -16,7 +16,11 @@ def logits_to_probs(logits: np.ndarray, config=None) -> np.ndarray:
 
     probs_t = F.softmax(logits_t, dim=1)
 
-    if config is not None and config.get("loss_type") == "focal":
+    if (
+        config is not None
+        and config.get("loss_type") == "focal"
+        and config.get("apply_posterior_transform", False)
+    ):
         probs_t = focal_posterior_transform(
             probs_t,
             gamma=config.get("focal_gamma", 2.0),

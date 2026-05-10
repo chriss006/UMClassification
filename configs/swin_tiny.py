@@ -21,8 +21,8 @@ CONFIG = {
     "logging_steps": 10,
 
     # best model / early stopping 
-    "metric_for_best_model": "eval_f1_macro",
-    "greater_is_better": True,
+    "metric_for_best_model": "eval_loss",
+    "greater_is_better": False,
     "early_stopping_patience": 10,
     "early_stopping_threshold": 0.001,
 
@@ -30,7 +30,7 @@ CONFIG = {
     "loss_type": "focal",
     "focal_gamma": 2.0,
     "focal_alpha": None,
+    "apply_posterior_transformation" : False,
     # checkpoint
-    "apply_posterior_transform": False,
     "resume_from_checkpoint": None,   
 }
