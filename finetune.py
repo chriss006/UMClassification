@@ -13,14 +13,14 @@ from transformers import (
 from transformers import Trainer
 from transformers.trainer_callback import PrinterCallback
 
-from UMClassification.configs.convnext_tiny import CONFIG
-from UMClassification.core.dataset import ImageFolderWithPaths, ImageClassificationCollator, ImageListWithPaths
-from UMClassification.core.builders import build_model
-from UMClassification.core.callbacks import TrainValHistoryCallback, PrettyLogCallback
-from UMClassification.core.losses import FocalLoss
-from UMClassification.core.metrics import make_compute_metrics
-from UMClassification.core.trainers import FocalTrainer
-from UMClassification.evaluation.test_utils import run_test_and_save_outputs
+from configs.convnext_tiny import CONFIG
+from core.dataset import ImageFolderWithPaths, ImageClassificationCollator, ImageListWithPaths
+from core.builders import build_model
+from core.callbacks import TrainValHistoryCallback, PrettyLogCallback
+from core.losses import FocalLoss
+from core.metrics import make_compute_metrics
+from core.trainers import FocalTrainer
+from evaluation.test_utils import run_test_and_save_outputs
 
 
 def ensure_dir(path: str):
