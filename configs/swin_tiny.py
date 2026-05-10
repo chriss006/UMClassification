@@ -21,15 +21,16 @@ CONFIG = {
     "logging_steps": 10,
 
     # best model / early stopping 
-    "metric_for_best_model": "eval_loss",
-    "greater_is_better": False,
+    "metric_for_best_model": "eval_f1_macro",
+    "greater_is_better": True,
     "early_stopping_patience": 10,
     "early_stopping_threshold": 0.001,
 
     # loss
-    "loss_type": "ce",
-    #"focal_gamma": 2.0,
-    #"focal_alpha": None,
+    "loss_type": "focal",
+    "focal_gamma": 2.0,
+    "focal_alpha": None,
     # checkpoint
+    "apply_posterior_transform": False,
     "resume_from_checkpoint": None,   
 }
