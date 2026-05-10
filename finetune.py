@@ -1,7 +1,7 @@
 # train.py
 from pathlib import Path
 import torch
-import os, argparse, copy
+import os, argparse, copy, importlib
 import numpy as np
 from sklearn.model_selection import StratifiedKFold
 from transformers import (
@@ -13,7 +13,6 @@ from transformers import (
 from transformers import Trainer
 from transformers.trainer_callback import PrinterCallback
 
-from configs.convnext_tiny import CONFIG
 from core.dataset import ImageFolderWithPaths, ImageClassificationCollator, ImageListWithPaths
 from core.builders import build_model
 from core.callbacks import TrainValHistoryCallback, PrettyLogCallback
@@ -33,6 +32,12 @@ def get_args():
     parser.add_argument("--output_dir", type=str, default=None)
     parser.add_argument("--kfold", type=int, default=1)
     parser.add_argument("--fold_index", type=int, default=-1)
+    parser.add_argument(
+    "--config",
+    type=str,
+    required=True,
+    help="Config module name, e.g. convnext_tiny, swint_tiny"
+    )
 
     return parser.parse_args()
 
@@ -53,6 +58,10 @@ def print_gpu_info():
         print("Using Apple Silicon GPU (MPS)")
     else:
         print("MPS not available → using CPU")
+
+def load_config(config_name: str):
+    module = importlib.import_module(f"configs.{config_name}")
+    return copy.deepcopy(module.CONFIG)
 
 
 def validate_class_consistency(train_dataset, val_dataset, test_dataset):
@@ -182,6 +191,7 @@ def run_one_training(config, train_dataset, val_dataset, test_dataset, image_pro
 
 
 def main(args):
+    CONFIG = load_config(args.config)
     set_seed(CONFIG["seed"])
 
     if args.data_root is not None:
