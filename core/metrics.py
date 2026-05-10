@@ -1,5 +1,7 @@
 import numpy as np
 from typing import Dict
+import torch
+import torch.nn.functional as F
 from sklearn.metrics import (
     accuracy_score,
     precision_recall_fscore_support,
@@ -8,20 +10,28 @@ from sklearn.metrics import (
 from sklearn.preprocessing import label_binarize
 from transformers import EvalPrediction
 
+# softmax
+def logits_to_probs(logits: np.ndarray, config=None) -> np.ndarray:
+    logits_t = torch.tensor(logits, dtype=torch.float32)
 
-def softmax_numpy(x: np.ndarray, axis: int = 1) -> np.ndarray:
-    x = x - np.max(x, axis=axis, keepdims=True)
-    exp_x = np.exp(x)
-    return exp_x / np.sum(exp_x, axis=axis, keepdims=True)
+    probs_t = F.softmax(logits_t, dim=1)
 
+    if config is not None and config.get("loss_type") == "focal":
+        probs_t = focal_posterior_transform(
+            probs_t,
+            gamma=config.get("focal_gamma", 2.0),
+        )
 
-def cross_entropy_numpy(probs: np.ndarray, labels: np.ndarray, eps: float = 1e-12) -> float:
+    return probs_t.cpu().numpy()
+
+# CE
+def cross_entropy(probs: np.ndarray, labels: np.ndarray, eps: float = 1e-12) -> float:
     probs = np.clip(probs, eps, 1.0)
     true_probs = probs[np.arange(len(labels)), labels]
     return float(-np.mean(np.log(true_probs)))
 
-
-def classwise_cross_entropy_numpy(
+# Class-wise CE
+def classwise_cross_entropy(
     probs: np.ndarray,
     labels: np.ndarray,
     num_classes: int,
@@ -41,8 +51,8 @@ def classwise_cross_entropy_numpy(
 
     return out
 
-
-def classwise_accuracy_numpy(
+# Class-wise Acc
+def classwise_accuracy(
     preds: np.ndarray,
     labels: np.ndarray,
     num_classes: int,
@@ -59,7 +69,7 @@ def classwise_accuracy_numpy(
 
     return out
 
-
+# ECE
 def expected_calibration_error(
     probs: np.ndarray,
     labels: np.ndarray,
@@ -90,10 +100,23 @@ def expected_calibration_error(
 
     return float(ece)
 
+# Focal Posterior Transformation 
+def focal_posterior_transform(prob, gamma=2.0, eps=1e-12):
+    prob = torch.clamp(prob, eps, 1.0 - eps)
 
-def compute_metrics(eval_pred: EvalPrediction) -> Dict[str, float]:
+    numerator = prob
+    denominator = (1.0 - prob) ** gamma - gamma * (1.0 - prob) ** (gamma - 1.0) * prob * torch.log(prob)
+
+    h = numerator / torch.clamp(denominator, min=eps)
+
+    calibrated_prob = h / torch.clamp(h.sum(dim=1, keepdim=True), min=eps)
+
+    return calibrated_prob
+
+
+def compute_metrics(eval_pred: EvalPrediction, config=None) -> Dict[str, float]:
     logits, labels = eval_pred.predictions, eval_pred.label_ids
-    probs = softmax_numpy(logits, axis=1)
+    probs = logits_to_probs(logits, axis=1)
     preds = np.argmax(logits, axis=1)
 
     num_classes = probs.shape[1]
@@ -116,12 +139,12 @@ def compute_metrics(eval_pred: EvalPrediction) -> Dict[str, float]:
         "precision_weighted": float(precision_weighted),
         "recall_weighted": float(recall_weighted),
         "f1_weighted": float(f1_weighted),
-        "ce": cross_entropy_numpy(probs, labels),
+        "ce": cross_entropy(probs, labels),
         "ece": expected_calibration_error(probs, labels, n_bins=15),
     }
 
     metrics.update(
-        classwise_cross_entropy_numpy(
+        classwise_cross_entropy(
             probs=probs,
             labels=labels,
             num_classes=num_classes,
@@ -129,7 +152,7 @@ def compute_metrics(eval_pred: EvalPrediction) -> Dict[str, float]:
     )
 
     metrics.update(
-        classwise_accuracy_numpy(
+        classwise_accuracy(
             preds=preds,
             labels=labels,
             num_classes=num_classes,
@@ -160,3 +183,9 @@ def compute_metrics(eval_pred: EvalPrediction) -> Dict[str, float]:
             metrics[f"ap_class_{c}"] = float("nan")
 
     return metrics
+
+
+def make_compute_metrics(config):
+    def wrapped(eval_pred):
+        return compute_metrics(eval_pred, config=config)
+    return wrapped

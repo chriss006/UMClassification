@@ -1,12 +1,9 @@
 # train.py
-import os
 from pathlib import Path
 import torch
-import argparse
-import copy
+import os, argparse, copy
 import numpy as np
 from sklearn.model_selection import StratifiedKFold
-from torch.utils.data import Dataset
 from transformers import (
     AutoImageProcessor,
     TrainingArguments,
@@ -16,14 +13,14 @@ from transformers import (
 from transformers import Trainer
 from transformers.trainer_callback import PrinterCallback
 
-from configs.convnext_tiny import CONFIG
-from core.dataset import ImageFolderWithPaths, ImageClassificationCollator, ImageListWithPaths
-from core.builders import build_model
-from core.callbacks import TrainValHistoryCallback, PrettyLogCallback
-from core.losses import FocalLoss
-from core.metrics import compute_metrics
-from core.trainers import FocalTrainer
-from evaluation.test_utils import run_test_and_save_outputs
+from codes.UMClassification.configs.convnext_tiny import CONFIG
+from codes.UMClassification.core.dataset import ImageFolderWithPaths, ImageClassificationCollator, ImageListWithPaths
+from codes.UMClassification.core.builders import build_model
+from codes.UMClassification.core.callbacks import TrainValHistoryCallback, PrettyLogCallback
+from codes.UMClassification.core.losses import FocalLoss
+from codes.UMClassification.core.metrics import make_compute_metrics
+from codes.UMClassification.core.trainers import FocalTrainer
+from codes.UMClassification.evaluation.test_utils import run_test_and_save_outputs
 
 
 def ensure_dir(path: str):
@@ -68,6 +65,8 @@ def validate_class_consistency(train_dataset, val_dataset, test_dataset):
         )
 
 
+
+
 def build_label_maps(class_names):
     label2id = {cls_name: i for i, cls_name in enumerate(class_names)}
     id2label = {i: cls_name for cls_name, i in label2id.items()}
@@ -75,8 +74,6 @@ def build_label_maps(class_names):
 
 
 def build_training_args(config):
-    use_mps = torch.backends.mps.is_available()
-
     return TrainingArguments(
         output_dir=config["output_dir"],
         remove_unused_columns=False,
@@ -90,8 +87,7 @@ def build_training_args(config):
         gradient_accumulation_steps=config["gradient_accumulation_steps"],
         num_train_epochs=config["num_train_epochs"],
         weight_decay=config["weight_decay"],
-        fp16=True,  # Apple Silicon에서는 끄는 게 안전
-        #use_mps_device=use_mps,
+        fp16=torch.cuda.is_available(),
         dataloader_num_workers=config["num_workers"],
         load_best_model_at_end=True,
         metric_for_best_model=config["metric_for_best_model"],
@@ -139,7 +135,7 @@ def run_one_training(config, train_dataset, val_dataset, test_dataset, image_pro
             eval_dataset=val_dataset,
             data_collator=collator,
             processing_class=image_processor,
-            compute_metrics=compute_metrics,
+            compute_metrics=make_compute_metrics(config),
             callbacks=[
                 history_callback,
                 pretty_log_callback,
@@ -156,7 +152,7 @@ def run_one_training(config, train_dataset, val_dataset, test_dataset, image_pro
             eval_dataset=val_dataset,
             data_collator=collator,
             processing_class=image_processor,
-            compute_metrics=compute_metrics,
+            compute_metrics=make_compute_metrics(config),
             callbacks=[
                 history_callback,
                 pretty_log_callback,
@@ -181,6 +177,7 @@ def run_one_training(config, train_dataset, val_dataset, test_dataset, image_pro
         test_dataset=test_dataset,
         idx_to_class=id2label,
         output_dir=config["output_dir"],
+        config=config
     )
 
 

@@ -1,13 +1,22 @@
 import math
 import json
 from transformers import TrainerCallback
-from transformers.trainer_callback import PrinterCallback
 from typing import Any
 
 
 def save_json(obj: Any, path: str):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(obj, f, indent=2, ensure_ascii=False)
+
+def fmt_metric(logs, key):
+    v = logs.get(key, float("nan"))
+    try:
+        v = float(v)
+        if math.isnan(v):
+            return "nan"
+        return f"{v:.4f}"
+    except (TypeError, ValueError):
+        return str(v)
 
 
 class TrainValHistoryCallback(TrainerCallback):
@@ -74,14 +83,14 @@ class PrettyLogCallback(TrainerCallback):
         elif "eval_loss" in logs:
             print(
                 f"[val] epoch {epoch_int} | "
-                f"loss: {float(logs['eval_loss']):.4f} | "
-                f"ce: {float(logs.get('eval_ce', 0.0)):.4f} | "
-                f"ece: {float(logs.get('eval_ece', 0.0)):.4f} | "
-                f"acc: {float(logs.get('eval_accuracy', 0.0)):.4f} | "
-                f"precision_macro: {float(logs.get('eval_precision_macro', 0.0)):.4f} | "
-                f"recall_macro: {float(logs.get('eval_recall_macro', 0.0)):.4f} | "
-                f"f1_macro: {float(logs.get('eval_f1_macro', 0.0)):.4f} | "
-                f"f1_weighted: {float(logs.get('eval_f1_weighted', 0.0)):.4f} | "
-                f"auc_roc_ovr: {float(logs.get('eval_auc_roc_ovr', 0.0)):.4f} | "
-                f"mAP: {float(logs.get('eval_mAP', 0.0)):.4f}"
+                f"loss: {fmt_metric(logs, 'eval_loss')} | "
+                f"ce: {fmt_metric(logs, 'eval_ce')} | "
+                f"ece: {fmt_metric(logs, 'eval_ece')} | "
+                f"acc: {fmt_metric(logs, 'eval_accuracy')} | "
+                f"precision_macro: {fmt_metric(logs, 'eval_precision_macro')} | "
+                f"recall_macro: {fmt_metric(logs, 'eval_recall_macro')} | "
+                f"f1_macro: {fmt_metric(logs, 'eval_f1_macro')} | "
+                f"f1_weighted: {fmt_metric(logs, 'eval_f1_weighted')} | "
+                f"auc_roc_ovr: {fmt_metric(logs, 'eval_auc_roc_ovr')} | "
+                f"mAP: {fmt_metric(logs, 'eval_mAP')}"
             )

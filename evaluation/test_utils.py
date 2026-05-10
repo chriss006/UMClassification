@@ -1,11 +1,11 @@
-import os
-import json
+import os, json
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 from typing import Dict, Any
+import torch
 from torch.utils.data import Dataset
 from transformers import Trainer
 from sklearn.metrics import (
@@ -17,11 +17,11 @@ from sklearn.metrics import (
     confusion_matrix,
 )
 from sklearn.preprocessing import label_binarize
-from core.metrics import (
-    softmax_numpy,
-    cross_entropy_numpy,
-    classwise_cross_entropy_numpy,
-    classwise_accuracy_numpy,
+from codes.UMClassification.core.metrics import (
+    logits_to_probs,
+    cross_entropy,
+    classwise_cross_entropy,
+    classwise_accuracy,
     expected_calibration_error,
 )
 
@@ -41,14 +41,14 @@ def run_test_and_save_outputs(
     test_dataset: Dataset,
     idx_to_class: Dict[int, str],
     output_dir: str,
+    config = None,
 ):
-
 
     pred_output = trainer.predict(test_dataset)
     logits = pred_output.predictions
     labels = pred_output.label_ids
 
-    probs = softmax_numpy(logits, axis=1)
+    probs = logits_to_probs(logits, config=config)
     preds = np.argmax(logits, axis=1)
 
     class_names = [idx_to_class[i] for i in range(len(idx_to_class))]
@@ -109,12 +109,12 @@ def run_test_and_save_outputs(
         "precision_weighted": float(precision_weighted),
         "recall_weighted": float(recall_weighted),
         "f1_weighted": float(f1_weighted),
-        "ce": cross_entropy_numpy(probs, labels),
+        "ce": cross_entropy(probs, labels),
         "ece": expected_calibration_error(probs, labels, n_bins=15),
     }
 
     test_metrics.update(
-        classwise_cross_entropy_numpy(
+        classwise_cross_entropy(
             probs=probs,
             labels=labels,
             num_classes=num_classes,
@@ -122,7 +122,7 @@ def run_test_and_save_outputs(
     )
 
     test_metrics.update(
-        classwise_accuracy_numpy(
+        classwise_accuracy(
             preds=preds,
             labels=labels,
             num_classes=num_classes,

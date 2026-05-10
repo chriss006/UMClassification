@@ -5,11 +5,11 @@ import torch
 import argparse
 from transformers import AutoImageProcessor, TrainingArguments, set_seed,  AutoModelForImageClassification
 
-from configs.convnext_tiny import CONFIG
-from core.dataset import ImageFolderWithPaths, ImageClassificationCollator
-from core.metrics import compute_metrics
-from core.trainers import FocalTrainer
-from evaluation.test_utils import run_test_and_save_outputs
+from codes.UMClassification.configs.convnext_tiny import CONFIG
+from codes.UMClassification.core.dataset import ImageFolderWithPaths, ImageClassificationCollator
+from codes.UMClassification.core.metrics import compute_metrics
+from codes.UMClassification.core.trainers import FocalTrainer
+from codes.UMClassification.evaluation.test_utils import run_test_and_save_outputs
 
 
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
