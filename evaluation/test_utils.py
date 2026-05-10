@@ -17,7 +17,7 @@ from sklearn.metrics import (
     confusion_matrix,
 )
 from sklearn.preprocessing import label_binarize
-from codes.UMClassification.core.metrics import (
+from UMClassification.core.metrics import (
     logits_to_probs,
     cross_entropy,
     classwise_cross_entropy,
