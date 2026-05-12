@@ -121,7 +121,7 @@ def focal_posterior_transform(prob, gamma=2.0, eps=1e-12):
 def compute_metrics(eval_pred: EvalPrediction, config=None) -> Dict[str, float]:
     logits, labels = eval_pred.predictions, eval_pred.label_ids
     probs = logits_to_probs(logits, config=config)
-    preds = np.argmax(logits, axis=1)
+    preds = np.argmax(probs, axis=1)
 
     num_classes = probs.shape[1]
 

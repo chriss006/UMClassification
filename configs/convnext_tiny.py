@@ -19,7 +19,7 @@ CONFIG = {
     "save_total_limit": 2,
     "logging_steps": 10,
 
-    "metric_for_best_model": "eval_mAP",
+    "metric_for_best_model": "eval_f1_macro",
     "greater_is_better": True,
     "early_stopping_patience": 10,
     "early_stopping_threshold": 0.001,
@@ -29,4 +29,5 @@ CONFIG = {
     "focal_alpha": None,
 
     "resume_from_checkpoint": None
+    "freeze_backbone": True
 }

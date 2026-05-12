@@ -27,10 +27,11 @@ CONFIG = {
     "early_stopping_threshold": 0.001,
 
     # loss
-    "loss_type": "focal",
-    "focal_gamma": 2.0,
-    "focal_alpha": None,
-    "apply_posterior_transformation" : False,
+    "loss_type": "ce",
+    #"focal_gamma": 2.0,
+    #"focal_alpha": None,
+    #"apply_posterior_transformation" : True,
     # checkpoint
     "resume_from_checkpoint": None,   
+    "freeze_backbone": True
 }

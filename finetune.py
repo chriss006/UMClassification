@@ -1,4 +1,4 @@
-# train.py
+# finetune.py
 from pathlib import Path
 import torch
 import os, argparse, copy, importlib
@@ -73,7 +73,25 @@ def validate_class_consistency(train_dataset, val_dataset, test_dataset):
             f"test:  {test_dataset.classes}"
         )
 
+def freeze_backbone_except_classifier(model):
+    for name, param in model.named_parameters():
+        param.requires_grad = False
 
+    classifier_keywords = [
+        "classifier",
+        "head",
+        "fc",
+        "score",
+    ]
+
+    for name, param in model.named_parameters():
+        if any(key in name for key in classifier_keywords):
+            param.requires_grad = True
+
+    print("\nTrainable parameters:")
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            print(name)
 
 
 def build_label_maps(class_names):
@@ -115,6 +133,10 @@ def run_one_training(config, train_dataset, val_dataset, test_dataset, image_pro
     print(f"Test size:  {len(test_dataset)}")
 
     model = build_model(config, id2label=id2label, label2id=label2id)
+    if config.get("freeze_backbone", False):
+        print("\nFreezing backbone: training classifier/head only")
+        freeze_backbone_except_classifier(model)
+        
     collator = ImageClassificationCollator()
     training_args = build_training_args(config)
 
