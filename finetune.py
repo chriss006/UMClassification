@@ -3,6 +3,7 @@ from pathlib import Path
 import torch
 import os, argparse, copy, importlib
 import numpy as np
+import torchvision.transforms as T
 from sklearn.model_selection import StratifiedKFold
 from transformers import (
     AutoImageProcessor,
@@ -24,6 +25,26 @@ from evaluation.test_utils import run_test_and_save_outputs
 
 def ensure_dir(path: str):
     os.makedirs(path, exist_ok=True)
+
+
+def build_augment_transform(config):
+    if not config.get("augmentation", False):
+        return None
+    return T.Compose([
+        T.RandomHorizontalFlip(p=0.5),
+        T.RandomVerticalFlip(p=0.5),
+        T.RandomRotation(degrees=config.get("aug_rotation", 30)),
+        T.ColorJitter(
+            brightness=config.get("aug_brightness", 0.3),
+            contrast=config.get("aug_contrast", 0.3),
+            saturation=config.get("aug_saturation", 0.1),
+        ),
+        T.RandomAffine(
+            degrees=0,
+            translate=(config.get("aug_translate", 0.1), config.get("aug_translate", 0.1)),
+            shear=config.get("aug_shear", 5),
+        ),
+    ])
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -231,11 +252,13 @@ def main(args):
     test_dir = data_root / "test"
 
     image_processor = AutoImageProcessor.from_pretrained(CONFIG["model_name"])
+    augment_transform = build_augment_transform(CONFIG)
 
     train_dataset_raw = ImageFolderWithPaths(
         root_dir=str(train_dir),
         image_processor=image_processor,
         image_extensions=CONFIG["image_extensions"],
+        augment_transform=augment_transform,
     )
     val_dataset_raw = ImageFolderWithPaths(
         root_dir=str(val_dir),
@@ -278,6 +301,7 @@ def main(args):
                 samples=train_samples,
                 image_processor=image_processor,
                 classes=class_names,
+                augment_transform=augment_transform,
             )
 
             val_dataset = ImageListWithPaths(
@@ -289,6 +313,8 @@ def main(args):
             fold_config = copy.deepcopy(CONFIG)
             fold_config["output_dir"] = os.path.join(original_output_dir, f"fold{fold}")
             ensure_dir(fold_config["output_dir"])
+            if "pretrained_checkpoint" in fold_config:
+                fold_config["pretrained_checkpoint"] = fold_config["pretrained_checkpoint"].format(fold=fold)
 
             run_one_training(
                 config=fold_config,

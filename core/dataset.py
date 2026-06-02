@@ -10,20 +10,23 @@ from torch.utils.data import Dataset
 
 
 class ImageListWithPaths(Dataset):
-    def __init__(self, samples, image_processor, classes):
+    def __init__(self, samples, image_processor, classes, augment_transform=None):
         self.samples = samples
         self.image_processor = image_processor
         self.classes = classes
         self.class_to_idx = {cls_name: idx for idx, cls_name in enumerate(classes)}
         self.idx_to_class = {idx: cls_name for cls_name, idx in self.class_to_idx.items()}
+        self.augment_transform = augment_transform
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
-
         image_path, label = self.samples[idx]
         image = Image.open(image_path).convert("RGB")
+
+        if self.augment_transform is not None:
+            image = self.augment_transform(image)
 
         processed = self.image_processor(images=image, return_tensors="pt")
         pixel_values = processed["pixel_values"].squeeze(0)
@@ -36,7 +39,7 @@ class ImageListWithPaths(Dataset):
 
 
 class ImageFolderWithPaths(Dataset):
-    def __init__(self, root_dir: str, image_processor, image_extensions):
+    def __init__(self, root_dir: str, image_processor, image_extensions, augment_transform=None):
         self.root_dir = Path(root_dir)
         self.image_processor = image_processor
 
@@ -62,12 +65,17 @@ class ImageFolderWithPaths(Dataset):
         if len(self.samples) == 0:
             raise ValueError(f"No images found in {self.root_dir}")
 
+        self.augment_transform = augment_transform
+
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
         image_path, label = self.samples[idx]
         image = Image.open(image_path).convert("RGB")
+
+        if self.augment_transform is not None:
+            image = self.augment_transform(image)
 
         processed = self.image_processor(images=image, return_tensors="pt")
         pixel_values = processed["pixel_values"].squeeze(0)

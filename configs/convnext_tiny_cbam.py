@@ -1,26 +1,22 @@
 import torch
 
 CONFIG = {
-    "data_root": "/Volumes/Extreme SSD/MAASAI/dataset/UWF",
-    "output_dir": "/Volumes/Extreme SSD/MAASAI/finetune_UWF/ConvNext_CBAM",
-
-    # Base model name (used only to load the image processor)
+    "data_root": "/home/halee/datasets/UWF",
+    "output_dir": "/home/halee/outputs/ConvNext/cbam",
     "model_name": "facebook/convnext-tiny-224",
-    # Path to the already-trained ConvNext checkpoint (saved by trainer.save_model)
-    "pretrained_checkpoint": "/Volumes/Extreme SSD/MAASAI/finetune_UWF/ConvNext/best_model",
+    "pretrained_checkpoint": "/home/halee/outputs/ConvNext/convnext_ce_3fold/fold{fold}/best_model",
 
     "num_labels": 6,
 
     # CBAM settings
     "use_cbam": True,
-    "cbam_reduction_ratio": 16,   # channel attention bottleneck ratio
-    "cbam_kernel_size": 7,        # spatial attention conv kernel
+    "cbam_reduction_ratio": 16,
+    "cbam_kernel_size": 7,
 
     "image_extensions": [".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"],
 
     "seed": 42,
-    "num_train_epochs": 30,
-    # Higher LR is fine: only CBAM + LayerNorm + classifier are trainable
+    "num_train_epochs": 50,
     "learning_rate": 1e-4,
     "weight_decay": 1e-4,
     "train_batch_size": 8,
@@ -35,14 +31,20 @@ CONFIG = {
     "early_stopping_patience": 10,
     "early_stopping_threshold": 0.001,
 
-    "loss_type": "focal",
+    # Augmentation (train only)
+    "augmentation": True,
+    "aug_rotation": 30,
+    "aug_brightness": 0.3,
+    "aug_contrast": 0.3,
+    "aug_saturation": 0.1,
+    "aug_translate": 0.1,
+    "aug_shear": 5,
+
+    "loss_type": "ce",
     "focal_gamma": 2.0,
     "focal_alpha": None,
     "apply_posterior_transformation": False,
 
     "resume_from_checkpoint": None,
-    # Backbone is frozen inside build_cbam_model; do NOT set freeze_backbone=True
-    # (that helper only knows about "classifier"/"head"/"fc" keywords and would
-    #  accidentally freeze the CBAM module as well)
     "freeze_backbone": False,
 }
