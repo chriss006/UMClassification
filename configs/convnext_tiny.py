@@ -27,7 +27,7 @@ CONFIG = {
     "loss_type": "focal",
     "focal_gamma": 2.0,
     "focal_alpha": None,
-    #"apply_posterior_transformation" : False,
+    "apply_posterior_transformation" : False,
 
     "resume_from_checkpoint": None,
     "freeze_backbone": True
