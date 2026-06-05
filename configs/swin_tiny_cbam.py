@@ -2,9 +2,10 @@ import torch
 
 CONFIG = {
     "data_root": "/home/halee/datasets/UWF",
-    "output_dir": "/home/halee/outputs/ConvNext/cbam",
-    "model_name": "facebook/convnext-tiny-224",
-    "pretrained_checkpoint": "/home/halee/outputs/ConvNext/convnext_ce_3fold/fold{fold}/best_model",
+    "output_dir": "/home/halee/outputs/SwinT/cbam",
+    "model_name": "microsoft/swin-tiny-patch4-window7-224",
+    # {fold} is replaced per-fold: CBAM fold 0 loads backbone fold 0, etc.
+    "pretrained_checkpoint": "/home/halee/outputs/SwinT/swint_ce/fold{fold}/best_model",
 
     "num_labels": 6,
 
@@ -41,8 +42,6 @@ CONFIG = {
     "aug_shear": 5,
 
     "loss_type": "ce",
-    #"focal_gamma": 2.0,
-    #"focal_alpha": None,
     "apply_posterior_transformation": False,
 
     "resume_from_checkpoint": None,

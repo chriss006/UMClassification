@@ -2,7 +2,7 @@ import torch
 
 CONFIG = {
     "data_root": "/home/halee/datasets/UWF",
-    "output_dir": "/home/halee/outputs/swin_tiny",
+    "output_dir": "/home/halee/outputs/SwinT/swin_ce_3fold",
     "model_name": "microsoft/swin-tiny-patch4-window7-224",
     "num_labels": 6,
 
@@ -27,7 +27,7 @@ CONFIG = {
     "early_stopping_threshold": 0.001,
 
     # loss
-    "loss_type": "focal",
+    "loss_type": "ce",
     "focal_gamma": 2.0,
     "focal_alpha": None,
     "apply_posterior_transformation" : False,
