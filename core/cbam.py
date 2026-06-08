@@ -174,16 +174,7 @@ class SwinWithStageCBAM(nn.Module):
 
 
 class SwinWithBlockCBAM(nn.Module):
-    """Block-Level CBAM for SwinT (Stage 3, 4 only).
-
-    Inserts CAM before W-MSA (even-indexed blocks) and
-    SAM before SW-MSA (odd-indexed blocks) via forward pre-hooks
-    on each SwinLayer's attention module.
-
-    Block channels (within blocks, before patch merging):
-      layers[1]: embed_dim * 2^1 = 192  (Stage 3, 28x28)
-      layers[2]: embed_dim * 2^2 = 384  (Stage 4, 14x14)
-    """
+    """Block-Level CBAM for SwinT (Stage 3, 4 only)."""
 
     def __init__(self, backbone_model, num_classes: int, target_stage_indices: list,
                  reduction_ratio: int = 16, kernel_size: int = 7):

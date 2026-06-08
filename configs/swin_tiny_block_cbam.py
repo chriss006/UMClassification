@@ -12,7 +12,6 @@ CONFIG = {
     # CBAM settings
     "use_cbam": True,
     "cbam_mode": "block",
-    # layers[1] = Stage 3 (28x28, 192ch blocks), layers[2] = Stage 4 (14x14, 384ch blocks)
     "cbam_stage_indices": [1, 2],
     "cbam_reduction_ratio": 16,
     "cbam_kernel_size": 7,
