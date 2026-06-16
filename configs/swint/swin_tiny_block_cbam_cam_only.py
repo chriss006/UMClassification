@@ -2,9 +2,8 @@ import torch
 
 CONFIG = {
     "data_root": "/home/halee/datasets/UWF",
-    "output_dir": "/home/halee/outputs/SwinT/block_cbam",
+    "output_dir": "/home/halee/outputs/SwinT/block_cbam_cam_only",
     "model_name": "microsoft/swin-tiny-patch4-window7-224",
-    # {fold} replaced per-fold: CBAM fold 0 loads backbone fold 0, etc.
     "pretrained_checkpoint": "/home/halee/outputs/SwinT/swint_ce/fold{fold}/best_model",
 
     "num_labels": 6,
@@ -12,9 +11,10 @@ CONFIG = {
     # CBAM settings
     "use_cbam": True,
     "cbam_mode": "block",
-    "cbam_stage_indices": [1, 2],
+    "cbam_stage_indices": [3],
     "cbam_reduction_ratio": 16,
     "cbam_kernel_size": 7,
+    "cbam_attention_type": "cam_only",  # CAM before W-MSA only
 
     "image_extensions": [".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"],
 
@@ -22,12 +22,12 @@ CONFIG = {
     "num_train_epochs": 50,
     "learning_rate": 2e-5,
     "weight_decay": 1e-4,
-    "train_batch_size": 8,
-    "eval_batch_size": 8,
-    "gradient_accumulation_steps": 2,
-    "num_workers": 2,
+    "train_batch_size": 32,
+    "eval_batch_size": 32,
+    "gradient_accumulation_steps": 1,
+    "num_workers": 8,
     "save_total_limit": 2,
-    "logging_steps": 10,
+    "logging_steps": 50,
 
     "metric_for_best_model": "eval_f1_macro",
     "greater_is_better": True,

@@ -124,6 +124,7 @@ def _build_block_cbam_model(config, id2label, label2id):
     stage_indices = config.get("cbam_stage_indices", [1, 2])
     reduction_ratio = config.get("cbam_reduction_ratio", 16)
     kernel_size = config.get("cbam_kernel_size", 7)
+    attention_type = config.get("cbam_attention_type", "full")
 
     if "swin" in model_name:
         full_model = SwinForImageClassification.from_pretrained(
@@ -134,7 +135,7 @@ def _build_block_cbam_model(config, id2label, label2id):
             ignore_mismatched_sizes=True,
         )
         return SwinWithBlockCBAM(full_model, num_labels, stage_indices,
-                                  reduction_ratio, kernel_size)
+                                  reduction_ratio, kernel_size, attention_type)
 
     else:
         raise ValueError(f"Block CBAM is only implemented for SwinT: {config['model_name']}")

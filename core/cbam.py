@@ -177,7 +177,8 @@ class SwinWithBlockCBAM(nn.Module):
     """Block-Level CBAM for SwinT (Stage 3, 4 only)."""
 
     def __init__(self, backbone_model, num_classes: int, target_stage_indices: list,
-                 reduction_ratio: int = 16, kernel_size: int = 7):
+                 reduction_ratio: int = 16, kernel_size: int = 7,
+                 attention_type: str = "full"):
         super().__init__()
         self.backbone = backbone_model
 
@@ -187,23 +188,34 @@ class SwinWithBlockCBAM(nn.Module):
         self.sam_modules = nn.ModuleDict()
         self._hook_handles = []
 
+        use_cam = attention_type in ("full", "cam_only")
+        use_sam = attention_type in ("full", "sam_only")
+        sam_both = attention_type == "sam_both"
+
         for stage_idx in target_stage_indices:
             block_channels = int(embed_dim * 2 ** stage_idx)
             stage = backbone_model.swin.encoder.layers[stage_idx]
 
             for block_idx, block in enumerate(stage.blocks):
                 key = f"s{stage_idx}_b{block_idx}"
-                if block_idx % 2 == 0:  # W-MSA block → CAM
-                    self.cam_modules[key] = ChannelAttention(block_channels, reduction_ratio)
-                    handle = block.attention.register_forward_pre_hook(
-                        self._make_cam_hook(key)
-                    )
-                else:  # SW-MSA block → SAM
+                if sam_both:  # SAM before every block (W-MSA and SW-MSA)
                     self.sam_modules[key] = SpatialAttention(kernel_size)
                     handle = block.attention.register_forward_pre_hook(
                         self._make_sam_hook(key)
                     )
-                self._hook_handles.append(handle)
+                    self._hook_handles.append(handle)
+                elif block_idx % 2 == 0 and use_cam:  # W-MSA block → CAM
+                    self.cam_modules[key] = ChannelAttention(block_channels, reduction_ratio)
+                    handle = block.attention.register_forward_pre_hook(
+                        self._make_cam_hook(key)
+                    )
+                    self._hook_handles.append(handle)
+                elif block_idx % 2 == 1 and use_sam:  # SW-MSA block → SAM
+                    self.sam_modules[key] = SpatialAttention(kernel_size)
+                    handle = block.attention.register_forward_pre_hook(
+                        self._make_sam_hook(key)
+                    )
+                    self._hook_handles.append(handle)
 
     def _make_cam_hook(self, key: str):
         def hook(module, args):
