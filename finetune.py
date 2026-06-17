@@ -59,6 +59,7 @@ def get_args():
     required=True,
     help="Config module name, e.g. convnext_tiny, swint_tiny"
     )
+    parser.add_argument("--use_predefined_folds", action="store_true")
 
     return parser.parse_args()
 
@@ -74,11 +75,6 @@ def print_gpu_info():
 
     print("torch.backends.mps.is_available():", torch.backends.mps.is_available())
     print("torch.backends.mps.is_built():", torch.backends.mps.is_built())
-
-    if torch.backends.mps.is_available():
-        print("Using Apple Silicon GPU (MPS)")
-    else:
-        print("MPS not available → using CPU")
 
 def load_config(config_name: str):
     module = importlib.import_module(f"configs.{config_name}")
@@ -217,13 +213,13 @@ def run_one_training(config, train_dataset, val_dataset, test_dataset, image_pro
 
     trainer.remove_callback(PrinterCallback)
 
-    print("\nStart training...")
+    print("[Train]")
     trainer.train(resume_from_checkpoint=config["resume_from_checkpoint"])
 
     print("\nSaving best model...")
     trainer.save_model(os.path.join(config["output_dir"], "best_model"))
 
-    print("\nRunning test evaluation...")
+    print("[Test Eval]")
     run_test_and_save_outputs(
         trainer=trainer,
         test_dataset=test_dataset,
@@ -231,7 +227,6 @@ def run_one_training(config, train_dataset, val_dataset, test_dataset, image_pro
         output_dir=config["output_dir"],
         config=config
     )
-
 
 def main(args):
     CONFIG = load_config(args.config)
@@ -247,12 +242,81 @@ def main(args):
     print_gpu_info()
 
     data_root = Path(CONFIG["data_root"])
-    train_dir = data_root / "train"
-    val_dir = data_root / "val"
-    test_dir = data_root / "test"
+    original_output_dir = CONFIG["output_dir"]
 
     image_processor = AutoImageProcessor.from_pretrained(CONFIG["model_name"])
     augment_transform = build_augment_transform(CONFIG)
+
+
+    if args.use_predefined_folds:
+        fold_dirs = sorted([
+            p for p in data_root.iterdir()
+            if p.is_dir() and p.name.startswith("fold_")
+        ])
+
+        if len(fold_dirs) == 0:
+            raise ValueError(f"No predefined fold folders found in: {data_root}")
+
+        for fold_dir in fold_dirs:
+            print(f"\n========== Running predefined {fold_dir.name} ==========")
+
+            train_dir = fold_dir / "train"
+            val_dir = fold_dir / "val"
+            test_dir = fold_dir / "test"
+
+            if not train_dir.exists() or not val_dir.exists() or not test_dir.exists():
+                raise FileNotFoundError(
+                    f"{fold_dir} must contain train/, val/, and test/ folders."
+                )
+
+            train_dataset = ImageFolderWithPaths(
+                root_dir=str(train_dir),
+                image_processor=image_processor,
+                image_extensions=CONFIG["image_extensions"],
+                augment_transform=augment_transform,
+            )
+
+            val_dataset = ImageFolderWithPaths(
+                root_dir=str(val_dir),
+                image_processor=image_processor,
+                image_extensions=CONFIG["image_extensions"],
+            )
+
+            test_dataset = ImageFolderWithPaths(
+                root_dir=str(test_dir),
+                image_processor=image_processor,
+                image_extensions=CONFIG["image_extensions"],
+            )
+
+            validate_class_consistency(train_dataset, val_dataset, test_dataset)
+
+            class_names = train_dataset.classes
+
+            fold_config = copy.deepcopy(CONFIG)
+            fold_config["data_root"] = str(fold_dir)
+            fold_config["output_dir"] = os.path.join(original_output_dir, fold_dir.name)
+            ensure_dir(fold_config["output_dir"])
+
+            if "pretrained_checkpoint" in fold_config:
+                fold_config["pretrained_checkpoint"] = fold_config["pretrained_checkpoint"].format(
+                    fold=fold_dir.name.replace("fold_", "")
+                )
+
+            run_one_training(
+                config=fold_config,
+                train_dataset=train_dataset,
+                val_dataset=val_dataset,
+                test_dataset=test_dataset,
+                image_processor=image_processor,
+                class_names=class_names,
+            )
+
+        return
+
+
+    train_dir = data_root / "train"
+    val_dir = data_root / "val"
+    test_dir = data_root / "test"
 
     train_dataset_raw = ImageFolderWithPaths(
         root_dir=str(train_dir),
@@ -260,11 +324,13 @@ def main(args):
         image_extensions=CONFIG["image_extensions"],
         augment_transform=augment_transform,
     )
+
     val_dataset_raw = ImageFolderWithPaths(
         root_dir=str(val_dir),
         image_processor=image_processor,
         image_extensions=CONFIG["image_extensions"],
     )
+
     test_dataset = ImageFolderWithPaths(
         root_dir=str(test_dir),
         image_processor=image_processor,
@@ -274,7 +340,7 @@ def main(args):
     validate_class_consistency(train_dataset_raw, val_dataset_raw, test_dataset)
 
     class_names = train_dataset_raw.classes
-    original_output_dir = CONFIG["output_dir"]
+
 
     if args.kfold > 1:
         all_samples = train_dataset_raw.samples + val_dataset_raw.samples
@@ -313,6 +379,7 @@ def main(args):
             fold_config = copy.deepcopy(CONFIG)
             fold_config["output_dir"] = os.path.join(original_output_dir, f"fold{fold}")
             ensure_dir(fold_config["output_dir"])
+
             if "pretrained_checkpoint" in fold_config:
                 fold_config["pretrained_checkpoint"] = fold_config["pretrained_checkpoint"].format(fold=fold)
 
