@@ -134,8 +134,37 @@ def _build_block_cbam_model(config, id2label, label2id):
             label2id=label2id,
             ignore_mismatched_sizes=True,
         )
-        return SwinWithBlockCBAM(full_model, num_labels, stage_indices,
-                                  reduction_ratio, kernel_size, attention_type)
+        model = SwinWithBlockCBAM(full_model, num_labels, stage_indices,
+                                   reduction_ratio, kernel_size, attention_type)
+
+        cbam_init_checkpoint = config.get("cbam_init_checkpoint")
+        if cbam_init_checkpoint:
+            _load_compatible_weights(model, cbam_init_checkpoint)
+
+        return model
 
     else:
         raise ValueError(f"Block CBAM is only implemented for SwinT: {config['model_name']}")
+
+
+def _load_compatible_weights(model, checkpoint_dir):
+    """Load tensors from a raw (non-HF) state-dict checkpoint, e.g. a previously
+    trained SwinWithBlockCBAM run, skipping any whose shape no longer matches
+    (typically the classifier head when the label count changes)."""
+    import os
+    from safetensors.torch import load_file
+
+    state_dict_path = os.path.join(checkpoint_dir, "model.safetensors")
+    source_state = load_file(state_dict_path)
+    target_state = model.state_dict()
+
+    compatible = {
+        k: v for k, v in source_state.items()
+        if k in target_state and target_state[k].shape == v.shape
+    }
+    skipped = sorted(set(source_state) - set(compatible))
+
+    model.load_state_dict(compatible, strict=False)
+    print(f"\nLoaded {len(compatible)}/{len(source_state)} tensors from cbam_init_checkpoint={checkpoint_dir}")
+    if skipped:
+        print(f"Skipped (shape mismatch): {skipped}")

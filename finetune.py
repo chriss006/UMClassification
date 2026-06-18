@@ -91,21 +91,18 @@ def validate_class_consistency(train_dataset, val_dataset, test_dataset):
         )
 
 def freeze_backbone_except_classifier(model):
-    for name, param in model.named_parameters():
+    freeze_except_keywords(model, ["classifier", "head", "fc", "score"])
+
+
+def freeze_except_keywords(model, keywords):
+    for param in model.parameters():
         param.requires_grad = False
 
-    classifier_keywords = [
-        "classifier",
-        "head",
-        "fc",
-        "score",
-    ]
-
     for name, param in model.named_parameters():
-        if any(key in name for key in classifier_keywords):
+        if any(key in name for key in keywords):
             param.requires_grad = True
 
-    print("\nTrainable parameters:")
+    print(f"\nTrainable parameters (keywords={keywords}):")
     for name, param in model.named_parameters():
         if param.requires_grad:
             print(name)
@@ -150,7 +147,9 @@ def run_one_training(config, train_dataset, val_dataset, test_dataset, image_pro
     print(f"Test size:  {len(test_dataset)}")
 
     model = build_model(config, id2label=id2label, label2id=label2id)
-    if config.get("freeze_backbone", False):
+    if config.get("freeze_except_keywords"):
+        freeze_except_keywords(model, config["freeze_except_keywords"])
+    elif config.get("freeze_backbone", False):
         print("\nFreezing backbone: training classifier/head only")
         freeze_backbone_except_classifier(model)
         
@@ -297,9 +296,14 @@ def main(args):
             fold_config["output_dir"] = os.path.join(original_output_dir, fold_dir.name)
             ensure_dir(fold_config["output_dir"])
 
+            fold_num = fold_dir.name.replace("fold_", "")
             if "pretrained_checkpoint" in fold_config:
                 fold_config["pretrained_checkpoint"] = fold_config["pretrained_checkpoint"].format(
-                    fold=fold_dir.name.replace("fold_", "")
+                    fold=fold_num
+                )
+            if fold_config.get("cbam_init_checkpoint"):
+                fold_config["cbam_init_checkpoint"] = fold_config["cbam_init_checkpoint"].format(
+                    fold=fold_num
                 )
 
             run_one_training(
@@ -382,6 +386,8 @@ def main(args):
 
             if "pretrained_checkpoint" in fold_config:
                 fold_config["pretrained_checkpoint"] = fold_config["pretrained_checkpoint"].format(fold=fold)
+            if fold_config.get("cbam_init_checkpoint"):
+                fold_config["cbam_init_checkpoint"] = fold_config["cbam_init_checkpoint"].format(fold=fold)
 
             run_one_training(
                 config=fold_config,
