@@ -5,21 +5,27 @@ import os, argparse, copy, importlib
 import numpy as np
 import torchvision.transforms as T
 from sklearn.model_selection import StratifiedKFold
+from sklearn.utils.class_weight import compute_class_weight
 from transformers import (
     AutoImageProcessor,
     TrainingArguments,
     set_seed,
     EarlyStoppingCallback,
 )
-from transformers import Trainer
 from transformers.trainer_callback import PrinterCallback
 
-from core.dataset import ImageFolderWithPaths, ImageClassificationCollator, ImageListWithPaths
+from torchvision.models import EfficientNet_V2_S_Weights
+from core.dataset import (
+    ImageFolderWithPaths,
+    ImageClassificationCollator,
+    ImageListWithPaths,
+    TorchvisionImageProcessor,
+)
 from core.builders import build_model
 from core.callbacks import TrainValHistoryCallback, PrettyLogCallback
 from core.losses import FocalLoss
 from core.metrics import make_compute_metrics
-from core.trainers import FocalTrainer
+from core.trainers import FocalTrainer, CETrainer
 from evaluation.test_utils import run_test_and_save_outputs
 
 
@@ -114,6 +120,26 @@ def build_label_maps(class_names):
     return label2id, id2label
 
 
+def build_class_weights(config, train_dataset, num_labels):
+    """Resolve config["class_weights"] into a tensor indexed by label id.
+
+    "balanced": inverse-frequency weights computed from train_dataset's labels.
+    a list of floats: used as-is (must be ordered to match label2id).
+    None (default): no weighting.
+    """
+    spec = config.get("class_weights")
+    if spec is None:
+        return None
+
+    if spec == "balanced":
+        labels = np.array([label for _, label in train_dataset.samples])
+        weights = compute_class_weight("balanced", classes=np.arange(num_labels), y=labels)
+    else:
+        weights = np.asarray(spec, dtype=np.float32)
+
+    return torch.tensor(weights, dtype=torch.float32)
+
+
 def build_training_args(config):
     return TrainingArguments(
         output_dir=config["output_dir"],
@@ -192,7 +218,11 @@ def run_one_training(config, train_dataset, val_dataset, test_dataset, image_pro
         )
     
     elif loss_type == "ce":
-        trainer = Trainer(
+        class_weights = build_class_weights(config, train_dataset, len(class_names))
+        if class_weights is not None:
+            print(f"\nUsing class weights: {dict(zip(class_names, class_weights.tolist()))}")
+
+        trainer = CETrainer(
             model=model,
             args=training_args,
             train_dataset=train_dataset,
@@ -205,6 +235,7 @@ def run_one_training(config, train_dataset, val_dataset, test_dataset, image_pro
                 pretty_log_callback,
                 early_stopping_callback,
             ],
+            class_weights=class_weights,
         )
     
     else:
@@ -243,7 +274,21 @@ def main(args):
     data_root = Path(CONFIG["data_root"])
     original_output_dir = CONFIG["output_dir"]
 
-    image_processor = AutoImageProcessor.from_pretrained(CONFIG["model_name"])
+    if CONFIG["model_name"] == "torchvision/efficientnet_v2_s":
+        weights = EfficientNet_V2_S_Weights[CONFIG.get("pretrained_checkpoint", "IMAGENET1K_V1")]
+        image_processor = TorchvisionImageProcessor(weights.transforms())
+    elif "retfound" in CONFIG["model_name"].lower():
+        from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+
+        retfound_transform = T.Compose([
+            T.Resize(224, interpolation=T.InterpolationMode.BICUBIC),
+            T.CenterCrop(224),
+            T.ToTensor(),
+            T.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
+        ])
+        image_processor = TorchvisionImageProcessor(retfound_transform)
+    else:
+        image_processor = AutoImageProcessor.from_pretrained(CONFIG["model_name"])
     augment_transform = build_augment_transform(CONFIG)
 
 

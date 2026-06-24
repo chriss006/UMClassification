@@ -3,8 +3,10 @@
 from transformers import (
     ConvNextForImageClassification,
     SwinForImageClassification,
+    EfficientNetForImageClassification,
     AutoModelForImageClassification,
 )
+from torchvision.models import efficientnet_v2_s, EfficientNet_V2_S_Weights
 
 
 def build_model(config, id2label, label2id):
@@ -13,6 +15,16 @@ def build_model(config, id2label, label2id):
 
     model_name = config["model_name"].lower()
     num_labels = len(id2label)
+
+    if "retfound" in model_name:
+        from core.retfound import build_retfound_model
+
+        return build_retfound_model(
+            checkpoint_path=config["pretrained_checkpoint"],
+            num_classes=num_labels,
+            global_pool=config.get("retfound_global_pool", False),
+            drop_path_rate=config.get("drop_path_rate", 0.1),
+        )
 
     if "convnext" in model_name:
         model_cls = ConvNextForImageClassification
@@ -39,7 +51,7 @@ def _build_cbam_model(config, id2label, label2id):
     if cbam_mode == "block":
         return _build_block_cbam_model(config, id2label, label2id)
 
-    from core.cbam import ConvNextWithCBAM, SwinWithCBAM
+    from core.cbam import ConvNextWithCBAM, SwinWithCBAM, EfficientNetWithCBAM, EfficientNetV2WithCBAM
 
     model_name = config["model_name"].lower()
     num_labels = len(id2label)
@@ -62,6 +74,37 @@ def _build_cbam_model(config, id2label, label2id):
         for p in backbone.parameters():
             p.requires_grad_(False)
         return SwinWithCBAM(backbone, num_labels, hidden_size, reduction_ratio, kernel_size)
+    
+    elif "efficientnet" in model_name:
+        if model_name.startswith("torchvision/"):
+            weights = EfficientNet_V2_S_Weights[pretrained_checkpoint]
+            backbone = efficientnet_v2_s(weights=weights)
+            hidden_size = backbone.classifier[1].in_features  # 1280 for efficientnet_v2_s
+
+            return EfficientNetV2WithCBAM(
+                backbone,
+                num_labels,
+                hidden_size,
+                reduction_ratio,
+                kernel_size,
+            )
+
+        full_model = EfficientNetForImageClassification.from_pretrained(
+            pretrained_checkpoint,
+            num_labels=num_labels,
+            id2label=id2label,
+            label2id=label2id,
+            ignore_mismatched_sizes=True,
+        )
+
+        hidden_size = full_model.config.hidden_dim
+        return EfficientNetWithCBAM(
+            full_model,
+            num_labels,
+            hidden_size,
+            reduction_ratio,
+            kernel_size,
+        )
 
     else:
         raise ValueError(f"CBAM not implemented for model: {config['model_name']}")
@@ -168,3 +211,4 @@ def _load_compatible_weights(model, checkpoint_dir):
     print(f"\nLoaded {len(compatible)}/{len(source_state)} tensors from cbam_init_checkpoint={checkpoint_dir}")
     if skipped:
         print(f"Skipped (shape mismatch): {skipped}")
+        

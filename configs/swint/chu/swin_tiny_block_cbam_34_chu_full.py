@@ -2,10 +2,10 @@ import torch
 
 CONFIG = {
     "data_root": "/home/halee/datasets/CHU_224_3fold",
-    "output_dir": "/home/halee/outputs/SwinT/chu/block_cbam_34_full",
+    "output_dir": "/home/halee/outputs/SwinT/chu/block_cbam_34",
     "model_name": "microsoft/swin-tiny-patch4-window7-224",
-    "pretrained_checkpoint": "/home/halee/outputs/SwinT/swint_ce/fold{fold}/best_model",
-    "cbam_init_checkpoint": "/home/halee/outputs/SwinT/block_cbam_34/fold{fold}/best_model",
+    "pretrained_checkpoint": "/home/halee/outputs/SwinT/uwf/swint_ce/fold{fold}/best_model",
+    "cbam_init_checkpoint": "/home/halee/outputs/SwinT/uwf/block_cbam_34/fold{fold}/best_model",
 
     "num_labels": 3,
 
@@ -44,6 +44,7 @@ CONFIG = {
     "aug_shear": 5,
 
     "loss_type": "ce",
+    "class_weights": None,
     "apply_posterior_transformation": False,
 
     "resume_from_checkpoint": None,

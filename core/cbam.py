@@ -279,3 +279,50 @@ class SwinWithCBAM(nn.Module):
             loss = F.cross_entropy(logits, labels)
 
         return ImageClassifierOutput(loss=loss, logits=logits)
+
+class EfficientNetWithCBAM(nn.Module):
+    """HF EfficientNet (V1) backbone -> single CBAM -> classifier, full fine-tuning."""
+    def __init__(self, backbone_model, num_classes, hidden_size, reduction_ratio=16, kernel_size=7):
+        super().__init__()
+        self.backbone = backbone_model.efficientnet
+        self.cbam = CBAM(hidden_size, reduction_ratio, kernel_size)
+        self.classifier = nn.Linear(hidden_size, num_classes)
+
+    def forward(self, pixel_values, labels=None, **kwargs):
+        out = self.backbone(pixel_values)
+        features = out.last_hidden_state  # [B, C, H, W]
+
+        features = self.cbam(features)
+        pooled = features.mean(dim=[-2, -1])
+        logits = self.classifier(pooled)
+
+        loss = None
+        if labels is not None:
+            loss = F.cross_entropy(logits, labels)
+
+        return ImageClassifierOutput(loss=loss, logits=logits)
+
+
+class EfficientNetV2WithCBAM(nn.Module):
+    """torchvision EfficientNetV2 backbone -> single CBAM -> classifier, full fine-tuning."""
+    def __init__(self, backbone, num_classes, hidden_size, reduction_ratio=16, kernel_size=7, dropout=0.2):
+        super().__init__()
+        self.backbone = backbone  # torchvision EfficientNet; only .features is used
+        self.backbone.classifier = nn.Identity()  # drop unused ImageNet head
+        self.cbam = CBAM(hidden_size, reduction_ratio, kernel_size)
+        self.dropout = nn.Dropout(dropout)
+        self.classifier = nn.Linear(hidden_size, num_classes)
+
+    def forward(self, pixel_values, labels=None, **kwargs):
+        features = self.backbone.features(pixel_values)  # [B, C, H, W]
+
+        features = self.cbam(features)
+        pooled = features.mean(dim=[-2, -1])
+        pooled = self.dropout(pooled)
+        logits = self.classifier(pooled)
+
+        loss = None
+        if labels is not None:
+            loss = F.cross_entropy(logits, labels)
+
+        return ImageClassifierOutput(loss=loss, logits=logits)

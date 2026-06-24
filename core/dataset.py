@@ -9,6 +9,21 @@ import torch
 from torch.utils.data import Dataset
 
 
+class TorchvisionImageProcessor:
+    """Minimal HF-image-processor-compatible wrapper around a torchvision weights transform,
+    so torchvision-based models (e.g. efficientnet_v2_s) can use the same dataset/collator
+    and be passed as Trainer's processing_class."""
+
+    def __init__(self, transform):
+        self.transform = transform
+
+    def __call__(self, images, return_tensors="pt"):
+        return {"pixel_values": self.transform(images).unsqueeze(0)}
+
+    def save_pretrained(self, *args, **kwargs):
+        pass
+
+
 class ImageListWithPaths(Dataset):
     def __init__(self, samples, image_processor, classes, augment_transform=None):
         self.samples = samples
