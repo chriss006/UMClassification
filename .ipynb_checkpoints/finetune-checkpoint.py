@@ -124,9 +124,6 @@ def build_class_weights(config, train_dataset, num_labels):
     """Resolve config["class_weights"] into a tensor indexed by label id.
 
     "balanced": inverse-frequency weights computed from train_dataset's labels.
-    "balanced_sqrt": milder version of "balanced" — sqrt of the inverse-frequency
-        weights, renormalized so the frequency-weighted average is still 1 (same
-        normalization property as "balanced", just a smaller spread between classes).
     a list of floats: used as-is (must be ordered to match label2id).
     None (default): no weighting.
     """
@@ -134,13 +131,9 @@ def build_class_weights(config, train_dataset, num_labels):
     if spec is None:
         return None
 
-    if spec in ("balanced", "balanced_sqrt"):
+    if spec == "balanced":
         labels = np.array([label for _, label in train_dataset.samples])
         weights = compute_class_weight("balanced", classes=np.arange(num_labels), y=labels)
-        if spec == "balanced_sqrt":
-            weights = np.sqrt(weights)
-            freq = np.bincount(labels, minlength=num_labels) / len(labels)
-            weights = weights / (weights * freq).sum()
     else:
         weights = np.asarray(spec, dtype=np.float32)
 

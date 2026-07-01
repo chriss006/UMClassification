@@ -1,10 +1,13 @@
 CONFIG = {
     "seed": 42,
-    "data_root": "/home/halee/datasets/UWF",
-    "output_dir": "/home/halee/outputs/EfficientNetv2/single_cbam_uwf_full",
+    "data_root": "/home/halee/datasets/CHU_224_5fold",
+    "output_dir": "/home/halee/outputs/EfficientNetv2/chu_5fold/single_cbam_chu_from_uwf",
 
     "model_name": "torchvision/efficientnet_v2_s",
     "pretrained_checkpoint": "IMAGENET1K_V1",
+    "cbam_init_checkpoint": "/home/halee/outputs/EfficientNetv2/single_cbam_uwf_full/fold{fold}/best_model",
+
+    "num_labels": 3,
 
     "use_cbam": True,
     "cbam_mode": "final",
@@ -14,17 +17,12 @@ CONFIG = {
     "freeze_backbone": False,
     "freeze_except_keywords": None,
 
-    "image_extensions": [".jpg", ".jpeg", ".png", ".bmp"],
+    "image_extensions": [".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"],
 
     "augmentation": True,
-    "aug_rotation": 30,
-    "aug_brightness": 0.3,
-    "aug_contrast": 0.3,
-    "aug_saturation": 0.1,
-    "aug_translate": 0.1,
-    "aug_shear": 5,
-
     "loss_type": "ce",
+    "class_weights": None,
+
     "learning_rate": 1e-5,
     "train_batch_size": 32,
     "eval_batch_size": 32,
@@ -40,5 +38,6 @@ CONFIG = {
 
     "early_stopping_patience": 8,
     "early_stopping_threshold": 0.0,
+
     "resume_from_checkpoint": None,
 }

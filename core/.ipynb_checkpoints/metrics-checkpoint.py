@@ -163,50 +163,28 @@ def compute_metrics(eval_pred: EvalPrediction, config=None) -> Dict[str, float]:
         )
     )
 
-    if num_classes == 2:
-        # roc_auc_score/average_precision_score expect a 1D positive-class score for
-        # binary problems; label_binarize collapses 2 classes to a single column,
-        # which silently breaks the multiclass-shaped calls below (shape mismatch
-        # caught as ValueError -> NaN). Handle binary explicitly instead.
-        y_score = probs[:, 1]
-        try:
-            metrics["auc_roc_ovr"] = float(roc_auc_score(labels, y_score))
-        except ValueError:
-            metrics["auc_roc_ovr"] = float("nan")
+    try:
+        metrics["auc_roc_ovr"] = float(
+            roc_auc_score(labels, probs, multi_class="ovr", average="macro")
+        )
+    except ValueError:
+        metrics["auc_roc_ovr"] = float("nan")
 
-        try:
-            ap1 = average_precision_score(labels, y_score)
-            ap0 = average_precision_score(1 - labels, 1 - y_score)
-            metrics["mAP"] = float((ap0 + ap1) / 2)
-            metrics["ap_class_0"] = float(ap0)
-            metrics["ap_class_1"] = float(ap1)
-        except ValueError:
-            metrics["mAP"] = float("nan")
-            metrics["ap_class_0"] = float("nan")
-            metrics["ap_class_1"] = float("nan")
-    else:
-        try:
-            metrics["auc_roc_ovr"] = float(
-                roc_auc_score(labels, probs, multi_class="ovr", average="macro")
-            )
-        except ValueError:
-            metrics["auc_roc_ovr"] = float("nan")
+    try:
+        labels_bin = label_binarize(labels, classes=np.arange(num_classes))
+        ap_per_class = average_precision_score(labels_bin, probs, average=None)
+        mAP = average_precision_score(labels_bin, probs, average="macro")
 
-        try:
-            labels_bin = label_binarize(labels, classes=np.arange(num_classes))
-            ap_per_class = average_precision_score(labels_bin, probs, average=None)
-            mAP = average_precision_score(labels_bin, probs, average="macro")
+        metrics["mAP"] = float(mAP)
 
-            metrics["mAP"] = float(mAP)
+        for c, ap in enumerate(ap_per_class):
+            metrics[f"ap_class_{c}"] = float(ap)
 
-            for c, ap in enumerate(ap_per_class):
-                metrics[f"ap_class_{c}"] = float(ap)
+    except ValueError:
+        metrics["mAP"] = float("nan")
 
-        except ValueError:
-            metrics["mAP"] = float("nan")
-
-            for c in range(num_classes):
-                metrics[f"ap_class_{c}"] = float("nan")
+        for c in range(num_classes):
+            metrics[f"ap_class_{c}"] = float("nan")
 
     return metrics
 

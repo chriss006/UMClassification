@@ -34,7 +34,7 @@ def build_model(config, id2label, label2id):
         model_cls = AutoModelForImageClassification
 
     model = model_cls.from_pretrained(
-        config.get("pretrained_checkpoint", config["model_name"]),
+        config["model_name"],
         num_labels=num_labels,
         id2label=id2label,
         label2id=label2id,

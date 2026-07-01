@@ -129,20 +129,40 @@ def run_test_and_save_outputs(
         )
     )
 
-    try:
-        test_metrics["auc_roc_ovr"] = float(
-            roc_auc_score(labels, probs, multi_class="ovr", average="macro")
-        )
-    except ValueError:
-        test_metrics["auc_roc_ovr"] = float("nan")
+    if num_classes == 2:
+        # roc_auc_score/average_precision_score expect a 1D positive-class score for
+        # binary problems; label_binarize collapses 2 classes to a single column,
+        # which silently breaks the multiclass-shaped calls below (shape mismatch
+        # caught as ValueError -> NaN). Use "melanoma" (UM) as the positive class,
+        # matching the convention used everywhere else in this project's analysis.
+        positive_idx = class_names.index("melanoma") if "melanoma" in class_names else 1
+        y_score = probs[:, positive_idx]
+        y_true_bin = (labels == positive_idx).astype(int)
 
-    try:
-        labels_bin = label_binarize(labels, classes=np.arange(num_classes))
-        test_metrics["mAP"] = float(
-            average_precision_score(labels_bin, probs, average="macro")
-        )
-    except ValueError:
-        test_metrics["mAP"] = float("nan")
+        try:
+            test_metrics["auc_roc_ovr"] = float(roc_auc_score(y_true_bin, y_score))
+        except ValueError:
+            test_metrics["auc_roc_ovr"] = float("nan")
+
+        try:
+            test_metrics["mAP"] = float(average_precision_score(y_true_bin, y_score))
+        except ValueError:
+            test_metrics["mAP"] = float("nan")
+    else:
+        try:
+            test_metrics["auc_roc_ovr"] = float(
+                roc_auc_score(labels, probs, multi_class="ovr", average="macro")
+            )
+        except ValueError:
+            test_metrics["auc_roc_ovr"] = float("nan")
+
+        try:
+            labels_bin = label_binarize(labels, classes=np.arange(num_classes))
+            test_metrics["mAP"] = float(
+                average_precision_score(labels_bin, probs, average="macro")
+            )
+        except ValueError:
+            test_metrics["mAP"] = float("nan")
 
     save_json(test_metrics, os.path.join(output_dir, "test_metrics.json"))
 
