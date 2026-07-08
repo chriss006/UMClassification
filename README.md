@@ -24,17 +24,23 @@ All experiments use **5-fold cross-validation** with patient-level splits.
 
 ## Architecture: Block-Level CBAM for Swin Transformer
 
-CBAM (Convolutional Block Attention Module) is inserted **inside each Swin Transformer block** of the target stages, applied to the reshaped spatial feature map after the self-attention + FFN output:
+CAM and SAM are injected **inside each Swin Transformer block** as `forward_pre_hook`s on the attention module, after `LayerNorm` and before the attention operation:
+
+- **Even-indexed blocks** (W-MSA): **CAM** (Channel Attention) is applied before W-MSA
+- **Odd-indexed blocks** (SW-MSA): **SAM** (Spatial Attention) is applied before SW-MSA
 
 ```
-Swin Block output → reshape [B, H, W, C] → CBAM (channel + spatial) → reshape back
+W-MSA block:   LayerNorm → [CAM] → W-MSA  → residual → LayerNorm → FFN → residual
+SW-MSA block:  LayerNorm → [SAM] → SW-MSA → residual → LayerNorm → FFN → residual
 ```
 
-| Variant | Stage indices | # CBAM modules |
+The key ablation is **at which Swin stages** this block-level injection is applied:
+
+| Variant | Stage indices | # attention modules with CAM/SAM |
 |---|---|---|
-| Stage 4 (frozen) | `[3]` | 6 |
-| Stage 4 (full FT) | `[3]` | 6 |
-| Stage 3 & 4 | `[2, 3]` | 8 |
+| Stage 4 (frozen backbone) | `[3]` | 6 (3×CAM + 3×SAM) |
+| Stage 4 (full fine-tuning) | `[3]` | 6 |
+| Stage 3 & 4 | `[2, 3]` | 8 (2×CAM + 2×SAM + 3×CAM + 3×SAM) |
 | All Stages | `[0, 1, 2, 3]` | 12 |
 
 Loss options: **Cross-Entropy (CE)** and **Weighted CE** (inverse-frequency weights).
