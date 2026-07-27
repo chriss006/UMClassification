@@ -11,7 +11,7 @@
 We systematically compare three deep learning architectures for uveal melanoma (UM) classification from single-modality ultra-widefield (UWF) color fundus images:
 
 - **RETFound** (ViT-L/16, CFP pre-trained) — full fine-tuning
-- **EfficientNetV2-S + CBAM** — ImageNet pre-trained with a single appended CBAM module
+- **EfficientNetV2-S + CBAM** — UWF pre-trained with a single appended CBAM module
 - **Swin Transformer Tiny + Block-Level CBAM** — UWF pre-trained, CBAM injected at various stages
 
 Two classification tasks are evaluated on a private clinical CHU dataset:
