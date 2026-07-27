@@ -15,7 +15,7 @@ We systematically compare three deep learning architectures for uveal melanoma (
 - **Swin Transformer Tiny + Block-Level CBAM** — UWF pre-trained, CBAM injected at various stages
 
 Two classification tasks are evaluated on a private clinical CHU dataset:
-- **3-class**: Uveal Melanoma (UM) vs. TMI (Trans-scleral Melanoma Irradiation) vs. Naevi
+- **3-class**: Uveal Melanoma (UM) vs. IMT vs. Naevi
 - **Binary**: Melanoma vs. Other (TMI + Naevi)
 
 All experiments use **5-fold cross-validation** with patient-level splits.
