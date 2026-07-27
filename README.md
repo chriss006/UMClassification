@@ -16,7 +16,7 @@ We systematically compare three deep learning architectures for uveal melanoma (
 
 Two classification tasks are evaluated on a private clinical CHU dataset:
 - **3-class**: Uveal Melanoma (UM) vs. IMT vs. Naevi
-- **Binary**: Melanoma vs. Other (TMI + Naevi)
+- **Binary**: Melanoma vs. Other (IMT + Naevi)
 
 All experiments use **5-fold cross-validation** with patient-level splits.
 
