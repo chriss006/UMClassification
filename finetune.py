@@ -87,6 +87,25 @@ def load_config(config_name: str):
     return copy.deepcopy(module.CONFIG)
 
 
+def build_image_processor(config):
+    if config["model_name"] == "torchvision/efficientnet_v2_s":
+        weights = EfficientNet_V2_S_Weights[config.get("pretrained_checkpoint", "IMAGENET1K_V1")]
+        return TorchvisionImageProcessor(weights.transforms())
+
+    if "retfound" in config["model_name"].lower():
+        from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
+
+        retfound_transform = T.Compose([
+            T.Resize(224, interpolation=T.InterpolationMode.BICUBIC),
+            T.CenterCrop(224),
+            T.ToTensor(),
+            T.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
+        ])
+        return TorchvisionImageProcessor(retfound_transform)
+
+    return AutoImageProcessor.from_pretrained(config["model_name"])
+
+
 def validate_class_consistency(train_dataset, val_dataset, test_dataset):
     if train_dataset.classes != val_dataset.classes or train_dataset.classes != test_dataset.classes:
         raise ValueError(
@@ -281,21 +300,7 @@ def main(args):
     data_root = Path(CONFIG["data_root"])
     original_output_dir = CONFIG["output_dir"]
 
-    if CONFIG["model_name"] == "torchvision/efficientnet_v2_s":
-        weights = EfficientNet_V2_S_Weights[CONFIG.get("pretrained_checkpoint", "IMAGENET1K_V1")]
-        image_processor = TorchvisionImageProcessor(weights.transforms())
-    elif "retfound" in CONFIG["model_name"].lower():
-        from timm.data.constants import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-
-        retfound_transform = T.Compose([
-            T.Resize(224, interpolation=T.InterpolationMode.BICUBIC),
-            T.CenterCrop(224),
-            T.ToTensor(),
-            T.Normalize(IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD),
-        ])
-        image_processor = TorchvisionImageProcessor(retfound_transform)
-    else:
-        image_processor = AutoImageProcessor.from_pretrained(CONFIG["model_name"])
+    image_processor = build_image_processor(CONFIG)
     augment_transform = build_augment_transform(CONFIG)
 
 

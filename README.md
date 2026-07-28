@@ -10,9 +10,9 @@
 
 We systematically compare three deep learning architectures for uveal melanoma (UM) classification from single-modality ultra-widefield (UWF) color fundus images:
 
-- **RETFound** (ViT-L/16, CFP pre-trained) — full fine-tuning
-- **EfficientNetV2-S + CBAM** — UWF pre-trained with a single appended CBAM module
-- **Swin Transformer Tiny + Block-Level CBAM** — UWF pre-trained, CBAM injected at various stages
+- **RETFound** (ViT-L/16, CFP pre-trained)
+- **EfficientNetV2-S + CBAM** 
+- **Swin Transformer Tiny + Block-Level CBAM** 
 
 Two classification tasks are evaluated on a private clinical CHU dataset:
 - **3-class**: Uveal Melanoma (UM) vs. IMT vs. Naevi
@@ -36,14 +36,14 @@ SW-MSA block:  LayerNorm → [SAM] → SW-MSA → residual → LayerNorm → FFN
 
 The key ablation is **at which Swin stages** this block-level injection is applied:
 
-| Variant | Stage indices | # attention modules with CAM/SAM |
-|---|---|---|
-| Stage 4 (frozen backbone) | `[3]` | 6 (3×CAM + 3×SAM) |
-| Stage 4 (full fine-tuning) | `[3]` | 6 |
-| Stage 3 & 4 | `[2, 3]` | 8 (2×CAM + 2×SAM + 3×CAM + 3×SAM) |
-| All Stages | `[0, 1, 2, 3]` | 12 |
+| Variant | Stage indices | Trainable | Matching `configs/swint/chu/` prefix |
+|---|---|---|---|
+| Stage 4 (frozen backbone) | `[3]` | stage-4 blocks, CBAM, head only | `swin_tiny_block_cbam_chu_5fold` |
+| Stage 4 (full fine-tuning) | `[3]` | everything | `swin_tiny_block_cbam_chu_full_5fold` |
+| Stage 3 & 4 | `[2, 3]` | everything | `swin_tiny_block_cbam_34_chu_full_5fold` |
+| All Stages | `[0, 1, 2, 3]` | everything | `swin_tiny_block_cbam_all_chu_full_5fold` |
 
-Loss options: **Cross-Entropy (CE)** and **Weighted CE** (inverse-frequency weights).
+Each variant has a plain CE version and a `_w_5fold` (weighted CE, inverse-class-frequency) version, plus a `_5fold_binary` counterpart for the binary task. `swin_tiny_chu_full_5fold` is the CBAM-free SwinT baseline.
 
 ---
 
@@ -51,26 +51,26 @@ Loss options: **Cross-Entropy (CE)** and **Weighted CE** (inverse-frequency weig
 
 ```
 UMClassification/
-├── finetune.py                  # Main training script
-├── test.py                      # Evaluation on test split
-├── eval_melanoma_binary.py      # Binary-specific evaluation
-├── psi_transform.py             # Posterior probability transform (Ψ)
+├── finetune.py                  # Train + automatically evaluate on the test split
+├── test.py                      # Standalone re-evaluation of an already-trained checkpoint
+├── eval_melanoma_binary.py      # Collapse 3-class fold predictions into melanoma-vs-other metrics
+├── psi_transform.py             # Post-hoc posterior calibration (focal Ψ-transform) on saved predictions
 ├── core/
-│   ├── cbam.py                  # CBAM + SwinWithBlockCBAM / SwinWithStageCBAM
-│   ├── builders.py              # Model factory (SwinT, EfficientNetV2, RETFound)
-│   ├── dataset.py               # ImageFolderWithPaths, collators
-│   ├── losses.py                # FocalLoss, weighted CE helpers
-│   ├── metrics.py               # Accuracy, macro F1, AUC-ROC, mAP
-│   ├── trainers.py              # Custom HuggingFace Trainers
-│   └── callbacks.py             # TrainValHistoryCallback, PrettyLogCallback
+│   ├── cbam.py                  # CBAM + SwinWithBlockCBAM / SwinWithStageCBAM / EfficientNetV2WithCBAM
+│   ├── builders.py               # Model factory (SwinT, EfficientNetV2, ConvNext, RETFound, ± CBAM)
+│   ├── dataset.py                # ImageFolderWithPaths, collators
+│   ├── losses.py                 # FocalLoss
+│   ├── metrics.py                # Accuracy, macro F1, AUC-ROC, mAP, calibration
+│   ├── trainers.py               # FocalTrainer / CETrainer (custom HuggingFace Trainers)
+│   └── callbacks.py              # TrainValHistoryCallback, PrettyLogCallback
 ├── configs/
-│   ├── swint/chu/               # SwinT Block-CBAM configs (3-class & binary)
-│   ├── efficientnet/            # EfficientNetV2 + Single CBAM configs
-│   └── convnext/                # ConvNext configs (ablation)
+│   ├── swint/chu/                # SwinT Block-CBAM configs actually used for the paper (5-fold, CHU data)
+│   ├── swint/uwf/                # SwinT UWF pre-training configs 
+│   ├── efficientnet/             # EfficientNetV2 + single CBAM configs
+│   └── convnext/                 # ConvNext configs (ablation, not in the paper's main comparison)
 └── evaluation/
-    └── test_utils.py            # run_test_and_save_outputs()
+    └── test_utils.py             # run_test_and_save_outputs()
 ```
-
 
 ---
 
@@ -89,17 +89,11 @@ tqdm
 albumentations
 ```
 
-Install:
-```bash
-pip install torch torchvision transformers timm scikit-learn pandas numpy tqdm albumentations
-```
-
 ---
 
 ## Dataset
 
 The CHU dataset is a **private clinical dataset** from CHU de Nice (France) and is **not publicly available**.
-
 
 To use your own dataset, organize images as:
 ```
@@ -110,39 +104,55 @@ dataset/
     └── test/{class_name}/*.jpg
 ```
 
-Update `data_root` in the config file accordingly. Class order must be alphabetical (as used by `ImageFolder`):
-- **3-class**: `melanoma=0, naevi=1, tmi=2`  → *(adjust label mapping in config)*
-- **Binary**: `melanoma=0, other=1`
+Update `data_root` in the config file to point at the `dataset/` folder (the one containing `fold_0` … `fold_4`).
+
+Class labels are assigned alphabetically by folder name. For the 3-class task: `imt=0, melanoma=1, naevi=2`.
 
 ---
 
 ## Training
 
-### SwinT + Block-Level CBAM (3-class, 5-fold)
+`finetune.py` supports two ways of splitting data; the paper's 5-fold results all use the first one.
+
+### Predefined 5-fold split
+
+`--use_predefined_folds` 
+  - iterates over every `fold_*` directory under `data_root` in a single run, writing each fold's outputs to `output_dir/fold_0/`, `output_dir/fold_1/`, …
 
 ```bash
-# Stage 3 & 4, Weighted CE, fold 0
+# Stage 3 & 4, Weighted CE, 3-class, all 5 folds
 python finetune.py \
-  --config configs/swint/chu/swin_tiny_block_cbam_34_chu_full_w_5fold.py \
-  --fold 0
+  --config swint.chu.swin_tiny_block_cbam_34_chu_full_w_5fold \
+  --use_predefined_folds
 ```
-
-### SwinT + Block-Level CBAM (binary, 5-fold)
 
 ```bash
+# Stage 3 & 4, Weighted CE, binary
 python finetune.py \
-  --config configs/swint/chu/swin_tiny_block_cbam_34_chu_full_5fold_binary.py \
-  --fold 0
+  --config swint.chu.swin_tiny_block_cbam_34_chu_full_w_5fold_binary \
+  --use_predefined_folds
 ```
 
-Key config parameters:
+`--config` is a **dotted module path** under `configs/` (no `.py`, no leading `configs.`), because `finetune.py` loads it with `importlib.import_module(f"configs.{args.config}")`.
+
+### K-fold (single `train/` + `val/` folder, split internally with `StratifiedKFold`)
+
+```bash
+python finetune.py --config convnext.convnext_tiny_cbam --kfold 5 --fold_index 0
+```
+
+Omit `--fold_index` to run all `--kfold` folds sequentially in one call.
+
+### Key config parameters
 
 | Parameter | Description |
 |---|---|
 | `cbam_stage_indices` | Swin stage indices to insert CBAM (0-indexed: 0–3) |
 | `cbam_mode` | `"block"` (per-block) or `"stage"` (post-stage) |
-| `loss_type` | `"ce"` or `"weighted_ce"` |
-| `pretrained_checkpoint` | UWF pre-trained SwinT checkpoint path |
+| `loss_type` | `"ce"` (cross-entropy) or `"focal"` (default; needs `focal_gamma`/`focal_alpha`) |
+| `class_weights` | `None` (default), `"balanced"`, `"balanced_sqrt"`, or an explicit list — only used when `loss_type="ce"`. This is what the `_w_5fold` (Weighted CE) configs set. |
+| `freeze_except_keywords` | List of parameter-name substrings to keep trainable; everything else is frozen (used for the "Stage 4, frozen backbone" variant) |
+| `pretrained_checkpoint` | UWF pre-trained checkpoint path (`{fold}` is substituted per fold) |
 | `num_train_epochs` | Default: 50 |
 | `early_stopping_patience` | Default: 10 |
 
@@ -150,14 +160,33 @@ Key config parameters:
 
 ## Evaluation
 
+**Evaluation is not a separate step for normal training runs.** At the end of every fold, `finetune.py` saves the best checkpoint and immediately calls `run_test_and_save_outputs()` on that fold's `test/` split ([finetune.py](finetune.py) → `run_one_training`), writing into that fold's `output_dir`:
+
+- `test_metrics.json` — accuracy, macro/weighted precision-recall-F1, AUC-ROC, mAP, calibration error, per-class metrics
+- `test_predictions.csv` — per-image prediction + per-class probabilities
+- `test_classwise_report.csv`, `confusion_matrix.csv` / `.png`, `predicted_class_distribution.json`
+
+### Re-running evaluation without retraining (`test.py`)
+
+Use this to re-score an existing checkpoint — e.g. against a different test split, or after changing something in `evaluation/test_utils.py`.
+
 ```bash
 python test.py \
-  --config configs/swint/chu/swin_tiny_block_cbam_34_chu_full_w_5fold.py \
-  --fold 0 \
-  --checkpoint /path/to/best_model
+  --config swint.chu.swin_tiny_block_cbam_34_chu_full_w_5fold \
+  --fold 0
 ```
 
-Outputs per fold: `test_metrics.json`, `test_predictions.csv` (with per-class probabilities).
+This reads `data_root/fold_0/test/` and the checkpoint at `output_dir/fold_0/best_model` (both derived from the config), rebuilds the model architecture from the config, and loads the fine-tuned weights into it — required for the CBAM models, which are saved as a raw state dict rather than a standard HuggingFace checkpoint. Override either with `--data_root`, `--output_dir`, `--checkpoint`, or `--test_split`.
+
+### Aggregating across folds
+
+```bash
+# Collapse 3-class predictions into melanoma-vs-other binary metrics, per fold + mean±std
+python eval_melanoma_binary.py /path/to/output_dir
+
+# Apply the focal posterior (Ψ) transform to saved test_predictions.csv and recompute metrics
+python psi_transform.py --input_root /path/to/output_dir --folds 5 --num_classes 3
+```
 
 ---
 
